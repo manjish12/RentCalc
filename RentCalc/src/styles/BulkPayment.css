@@ -1,0 +1,94 @@
+.bulk-payment {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.bulk-payment h3 {
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+}
+
+.distribution-preview {
+  margin-top: 1.5rem;
+}
+
+.distribution-preview h4 {
+  color: #555;
+  margin-bottom: 1rem;
+}
+
+.distribution-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.distribution-table th,
+.distribution-table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e1e8ed;
+}
+
+.distribution-table th {
+  background: #667eea;
+  color: white;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.distribution-table td.applied {
+  color: #00b894;
+  font-weight: 600;
+}
+
+.surplus-section {
+  background: #e7f4e4;
+  border-left: 4px solid #00b894;
+  padding: 1rem;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 1.5rem;
+}
+
+.surplus-amount {
+  font-size: 1.1rem;
+  color: #00b894;
+  margin-bottom: 1rem;
+}
+
+.surplus-action label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.bulk-payment-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .distribution-table {
+    font-size: 0.85rem;
+  }
+
+  .distribution-table th,
+  .distribution-table td {
+    padding: 0.5rem;
+  }
+
+  .bulk-payment-actions {
+    flex-direction: column;
+  }
+
+  .bulk-payment-actions button {
+    width: 100%;
+  }
+}
