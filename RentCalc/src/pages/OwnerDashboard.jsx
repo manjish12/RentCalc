@@ -247,7 +247,7 @@ const OwnerDashboard = () => {
       <div className="dashboard-content">
         {user?.ownerCode && (
           <div className="owner-code-banner">
-            <strong>Code:</strong> <code>{user.ownerCode}</code>
+            <strong> Owner Code:</strong> <code>{user.ownerCode}</code>
           </div>
         )}
         <div className="dashboard-section">
