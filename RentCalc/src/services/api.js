@@ -68,5 +68,10 @@ export const messagesAPI = {
   markMessagesRead: (otherUserId) => api.put('/messages/read', { otherUserId }),
   getUnreadCount: () => api.get('/messages/unread-count') // New
 };
+export const yearsAPI = {
+  getYears: () => api.get('/years'),
+  addYear: (year) => api.post('/years', { year }),
+  deleteYear: (id) => api.delete(`/years/${id}`)
+};
 
 export default api;

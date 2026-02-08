@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import UserSelect from '../components/UserSelect';
@@ -10,13 +11,15 @@ import BulkPayment from '../components/BulkPayment';
 import QRUpload from '../components/QRUpload';
 import Loading from '../components/Loading';
 import ChatWidget from '../components/ChatWidget'; 
-import { usersAPI, rentsAPI } from '../services/api'; // Removed notificationsAPI
+import { usersAPI, rentsAPI, yearsAPI } from '../services/api'; // Added yearsAPI
 import { sortRentsByDate, formatCurrency } from '../utils/helpers';
 import { DEFAULT_YEARS } from '../utils/constants';
+import { FiTrash2, FiPlus } from 'react-icons/fi';
 import '../styles/Dashboard.css';
 
 const OwnerDashboard = () => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   
   const [users, setUsers] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -27,9 +30,34 @@ const OwnerDashboard = () => {
   const [qrUrl, setQrUrl] = useState(null);
   const [qrLoading, setQrLoading] = useState(true);
   
-  const [availableYears, setAvailableYears] = useState([...DEFAULT_YEARS]);
+  // Year Management State
+  const [customYears, setCustomYears] = useState([]);
   const [showAddYear, setShowAddYear] = useState(false);
   const [newYear, setNewYear] = useState('');
+  const [isYearSubmitting, setIsYearSubmitting] = useState(false);
+
+  // Combine Default + Custom Years, unique and sorted
+  const allAvailableYears = Array.from(new Set([...DEFAULT_YEARS, ...customYears.map(y => y.year)])).sort((a, b) => a - b);
+
+  // --- SOCKET LISTENER ---
+  useEffect(() => {
+    if (!socket) return;
+    socket.on('new-notification', (newNotif) => {
+      toast.success(`New Notification: ${newNotif.message}`);
+    });
+    return () => socket.off('new-notification');
+  }, [socket]);
+  // -----------------------
+
+  // --- INITIAL DATA FETCH ---
+  const fetchCustomYears = useCallback(async () => {
+    try {
+      const response = await yearsAPI.getYears();
+      setCustomYears(response.data);
+    } catch (error) {
+      console.error('Failed to fetch years:', error);
+    }
+  }, []);
 
   const fetchQR = useCallback(async () => {
     if (!user?._id) return;
@@ -57,8 +85,9 @@ const OwnerDashboard = () => {
     if (user?._id) {
       fetchUsers();
       fetchQR();
+      fetchCustomYears();
     }
-  }, [user?._id, fetchUsers, fetchQR]);
+  }, [user?._id, fetchUsers, fetchQR, fetchCustomYears]);
 
   useEffect(() => {
     if (selectedUserId) {
@@ -82,22 +111,44 @@ const OwnerDashboard = () => {
     }
   };
 
-  const handleAddYear = () => {
+  // --- YEAR MANAGEMENT HANDLERS ---
+  const handleAddYear = async () => {
     const year = parseInt(newYear);
     if (!year || year < 2070 || year > 2200) {
-      toast.error('Invalid year');
+      toast.error('Invalid year (2070-2200)');
       return;
     }
-    if (availableYears.includes(year)) {
-      toast.error('Year exists');
+    if (allAvailableYears.includes(year)) {
+      toast.error('Year already exists');
       return;
     }
-    setAvailableYears(prev => [...prev, year].sort((a, b) => a - b));
-    setNewYear('');
-    setShowAddYear(false);
-    toast.success(`Year ${year} added`);
+
+    setIsYearSubmitting(true);
+    try {
+      await yearsAPI.addYear(year);
+      await fetchCustomYears(); 
+      setNewYear('');
+      setShowAddYear(false); // Close input after adding
+      toast.success(`Year ${year} added`);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to add year');
+    } finally {
+      setIsYearSubmitting(false);
+    }
   };
 
+  const handleDeleteYear = async (id) => {
+    if (!window.confirm('Delete this year from list?')) return;
+    try {
+      await yearsAPI.deleteYear(id);
+      setCustomYears(prev => prev.filter(y => y._id !== id));
+      toast.success('Year deleted');
+    } catch (error) {
+      toast.error('Failed to delete year');
+    }
+  };
+
+  // --- RENT & USER HANDLERS ---
   const handleUserSelect = (userId) => {
     setSelectedUserId(userId);
     setEditingEntry(null);
@@ -192,14 +243,13 @@ const OwnerDashboard = () => {
   const unpaidBills = history.filter(h => h.paymentStatus !== 'paid');
   const totalPaid = history.reduce((sum, h) => sum + (h.paidAmount || 0), 0);
   const totalDue = history.reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
-  
   const selectedUser = users.find(u => u._id === selectedUserId);
 
   if (!user) return <Loading text="Loading..." />;
 
   return (
     <div className="dashboard">
-      <Header /> {/* Removed notification props */}
+      <Header />
       
       <div className="dashboard-content">
         {user?.ownerCode && (
@@ -212,19 +262,77 @@ const OwnerDashboard = () => {
           {qrLoading ? <Loading text="Loading QR..." /> : <QRUpload currentQR={qrUrl} onUploadSuccess={handleQRUpload} />}
         </div>
 
+        {/* --- YEAR MANAGEMENT SECTION --- */}
         <div className="dashboard-section">
           <h2>Year Management</h2>
-          {!showAddYear ? (
-            <button className="btn-primary" onClick={() => setShowAddYear(true)}>+ Add Year</button>
-          ) : (
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <input type="number" value={newYear} onChange={(e) => setNewYear(e.target.value)} placeholder="Year" />
-              <button className="btn-primary" onClick={handleAddYear}>Add</button>
-              <button className="btn-secondary" onClick={() => setShowAddYear(false)}>Cancel</button>
-            </div>
-          )}
-          <p>Available: {availableYears.join(', ')}</p>
+          
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            {!showAddYear ? (
+              <button 
+                className="btn-primary btn-small" 
+                onClick={() => setShowAddYear(true)}
+              >
+                <FiPlus /> Add New Year
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input 
+                  type="number" 
+                  value={newYear} 
+                  onChange={(e) => setNewYear(e.target.value)} 
+                  placeholder="Enter year (e.g., 2095)" 
+                  style={{ padding: '8px', borderRadius: '6px', border: '2px solid #e1e8ed', width: '140px' }}
+                />
+                <button 
+                  className="btn-primary btn-small" 
+                  onClick={handleAddYear} 
+                  disabled={isYearSubmitting}
+                >
+                  {isYearSubmitting ? 'Saving...' : 'Add'}
+                </button>
+                <button 
+                  className="btn-secondary btn-small" 
+                  onClick={() => { setShowAddYear(false); setNewYear(''); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+          
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {/* Default Years (Read-only) */}
+            {DEFAULT_YEARS.map(y => (
+              <span key={y} style={{ padding: '6px 12px', background: '#e1e8ed', borderRadius: '20px', fontSize: '13px', color: '#666' }}>
+                {y}
+              </span>
+            ))}
+            
+            {/* Custom Years (Deletable) */}
+            {customYears.map(y => (
+              <span key={y._id} style={{ 
+                padding: '6px 12px', 
+                background: '#d4edda', 
+                border: '1px solid #c3e6cb', 
+                borderRadius: '20px', 
+                fontSize: '13px', 
+                color: '#155724', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '6px' 
+              }}>
+                {y.year}
+                <FiTrash2 
+                  size={12} 
+                  style={{ cursor: 'pointer', color: '#dc3545' }} 
+                  onClick={() => handleDeleteYear(y._id)} 
+                  title="Remove year"
+                />
+              </span>
+            ))}
+          </div>
         </div>
+        {/* ------------------------------- */}
 
         <div className="dashboard-section">
           <h2>Select Tenant</h2>
@@ -253,7 +361,14 @@ const OwnerDashboard = () => {
             )}
             
             <div className="dashboard-section">
-              <RentForm onSubmit={handleSubmitRent} initialData={editingEntry} history={history} isEditing={!!editingEntry} onCancel={() => setEditingEntry(null)} availableYears={availableYears} />
+              <RentForm 
+                onSubmit={handleSubmitRent} 
+                initialData={editingEntry} 
+                history={history} 
+                isEditing={!!editingEntry} 
+                onCancel={() => setEditingEntry(null)} 
+                availableYears={allAvailableYears} // Pass all years to form
+              />
             </div>
             
             <div className="dashboard-section">
@@ -270,6 +385,7 @@ const OwnerDashboard = () => {
         )}
       </div>
       
+
       <ChatWidget 
         receiverId={selectedUserId} 
         receiverName={selectedUser?.name} 

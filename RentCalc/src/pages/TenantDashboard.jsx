@@ -8,7 +8,7 @@ import Loading from '../components/Loading';
 import ChatWidget from '../components/ChatWidget';
 import { rentsAPI, usersAPI, messagesAPI } from '../services/api';
 import { sortRentsByDate, formatCurrency } from '../utils/helpers';
-import { FiDollarSign, FiX, FiCheck } from 'react-icons/fi';
+import { FiX, FiCheck } from 'react-icons/fi';
 import '../styles/Dashboard.css';
 import '../styles/Modal.css';
 
@@ -125,7 +125,7 @@ const TenantDashboard = () => {
                 {unpaidEntries.map(entry => (
                   <div key={entry._id} className="pending-item">
                     <span><strong>{entry.month} {entry.year}</strong>: {formatCurrency(entry.remainingAmount)}</span>
-                    <button type="button" className="btn-primary btn-small" onClick={() => handlePayRent(entry)}><FiDollarSign /> Pay Now</button>
+                    <button type="button" className="btn-primary btn-small" onClick={() => handlePayRent(entry)}>Pay Now</button>
                   </div>
                 ))}
               </div>

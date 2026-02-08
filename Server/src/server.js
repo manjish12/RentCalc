@@ -11,6 +11,7 @@ import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import rentRoutes from './routes/rentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import yearRoutes from './routes/yearRoutes.js';
 
 dotenv.config();
 
@@ -69,6 +70,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/rents', rentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/years', yearRoutes); 
 // uploadRoutes is no longer needed as we use userController for uploads
 
 // Health check
