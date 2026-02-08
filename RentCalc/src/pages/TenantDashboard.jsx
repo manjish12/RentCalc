@@ -5,8 +5,8 @@ import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import RentHistory from '../components/RentHistory';
 import Loading from '../components/Loading';
+import ChatWidget from '../components/ChatWidget'; // Import Chat
 import { rentsAPI, usersAPI, notificationsAPI } from '../services/api';
-// Import generateCombinedPDF here
 import { sortRentsByDate, formatCurrency, generateCombinedPDF } from '../utils/helpers';
 import { FiDollarSign, FiX, FiCheck, FiDownload } from 'react-icons/fi';
 import '../styles/Dashboard.css';
@@ -94,17 +94,14 @@ const TenantDashboard = () => {
     }
   };
 
-  // --- NEW: Handle PDF Download ---
   const handleDownloadReport = () => {
     if (history.length === 0) {
       toast.error('No history to download');
       return;
     }
-    // Pass user.name so it shows correctly on the PDF
     generateCombinedPDF(history, user.name);
     toast.success('Downloading full report...');
   };
-  // --------------------------------
 
   const totalDue = history.filter(h => h.paymentStatus !== 'paid').reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
   const totalPaid = history.reduce((sum, h) => sum + (h.paidAmount || 0), 0);
@@ -115,8 +112,6 @@ const TenantDashboard = () => {
       <Header />
 
       <div className="dashboard-content">
-        
-        {/* Added Download Button Here */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
           <button 
             className="btn-primary" 
@@ -194,6 +189,12 @@ const TenantDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* CHAT WIDGET - Connects to linked owner */}
+      <ChatWidget 
+        receiverId={user?.linkedOwnerId} 
+        receiverName="Owner" 
+      />
     </div>
   );
 };

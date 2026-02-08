@@ -62,4 +62,11 @@ export const notificationsAPI = {
   deleteNotification: (id) => api.delete(`/notifications/${id}`)
 };
 
+export const messagesAPI = {
+  getMessages: (otherUserId) => api.get(`/messages/${otherUserId}`),
+  sendMessage: (receiverId, text) => api.post('/messages', { receiverId, text }),
+  // New API call
+  markMessagesRead: (otherUserId) => api.put('/messages/read', { otherUserId })
+};
+
 export default api;

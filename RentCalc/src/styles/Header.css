@@ -2,8 +2,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 2rem;
-  background: rgba(255, 255, 255, 0.95);
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
@@ -13,7 +13,7 @@
 .header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 16px;
 }
 
 .header-title {
@@ -28,9 +28,9 @@
 .header-role {
   background: linear-gradient(45deg, #667eea, #764ba2);
   color: white;
-  padding: 0.25rem 0.75rem;
+  padding: 4px 12px;
   border-radius: 20px;
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -38,19 +38,19 @@
 .header-right {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 16px;
 }
 
 .header-user {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
   color: #555;
   font-weight: 500;
 }
 
 .header-icon {
-  font-size: 1.25rem;
+  font-size: 20px;
 }
 
 .header-notification-btn {
@@ -58,10 +58,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   background: #f8f9fa;
-  border: none;
+  border: 2px solid #e1e8ed;
   border-radius: 50%;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -70,34 +70,37 @@
 .header-notification-btn:hover {
   background: #e9ecef;
   transform: scale(1.05);
+  border-color: #667eea;
 }
 
 .notification-badge {
   position: absolute;
-  top: -5px;
-  right: -5px;
+  top: -4px;
+  right: -4px;
   background: #e74c3c;
   color: white;
-  font-size: 0.7rem;
+  font-size: 11px;
   font-weight: 700;
-  width: 20px;
+  min-width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0 6px;
 }
 
 .header-logout-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  gap: 8px;
+  padding: 10px 20px;
   background: linear-gradient(45deg, #ff6b6b, #ee5a52);
   color: white;
   border: none;
   border-radius: 8px;
   font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -107,25 +110,51 @@
   box-shadow: 0 4px 15px rgba(238, 90, 82, 0.4);
 }
 
+/* --- RESPONSIVE STYLES --- */
 @media (max-width: 768px) {
   .header {
-    padding: 0.75rem 1rem;
+    padding: 12px 16px;
   }
 
+  /* Make title smaller to fit name */
   .header-title {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
   }
 
+  /* Adjust gaps */
+  .header-left, .header-right {
+    gap: 8px;
+  }
+
+  /* Hide the Role label on very small screens if needed, 
+     but keep User Name visible now */
+  
+  /* Ensure User Name is VISIBLE but slightly smaller */
   .header-user span {
-    display: none;
+    display: block; /* Changed from none to block */
+    font-size: 13px;
+    max-width: 100px; /* Truncate if name is super long */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
+  /* Hide the text "Logout" inside the button to save space */
   .header-logout-btn span {
     display: none;
   }
 
+  /* Make logout button a circle icon */
   .header-logout-btn {
-    padding: 0.5rem;
+    padding: 0;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
+    justify-content: center;
+  }
+  
+  .header-notification-btn {
+    width: 36px;
+    height: 36px;
   }
 }

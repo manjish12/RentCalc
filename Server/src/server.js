@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import messageRoutes from './routes/messageRoutes.js';
 import connectDB from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -67,6 +68,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/rents', rentRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/messages', messageRoutes);
 // uploadRoutes is no longer needed as we use userController for uploads
 
 // Health check
