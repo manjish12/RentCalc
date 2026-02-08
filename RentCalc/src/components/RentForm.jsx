@@ -23,7 +23,7 @@ const RentForm = ({
     internet: 'no',
     internetRate: '',
     paymentStatus: PAYMENT_STATUS.PAID,
-    paidAmount: '',
+    paidAmount: '', // Starts empty
     remainingAmount: ''
   });
   
@@ -68,16 +68,15 @@ const RentForm = ({
     }
   }, [history, isEditing, initialData]);
 
-  // Reset selected internet months when duration/start month changes
+  // Handle Internet Month Selection Default
   useEffect(() => {
     if (form.internet === 'yes') {
-      // Default: select all months
       const months = getCalculationMonths();
       setSelectedInternetMonths(new Set(months));
     }
   }, [multiMonths, form.month, form.internet]);
 
-  // Calculate total
+  // --- CHANGED LOGIC HERE FOR 0 VS EMPTY ---
   useEffect(() => {
     const calculatedTotal = calculateTotal({
       rent: parseFloat(form.rent) || 0,
@@ -95,12 +94,23 @@ const RentForm = ({
     setTotal(calculatedTotal);
 
     if (form.paymentStatus === PAYMENT_STATUS.PAID) {
+      // If Paid, Paid = Total, Remaining = 0
       setForm(prev => ({ ...prev, paidAmount: calculatedTotal.toString(), remainingAmount: '0' }));
     } else if (form.paymentStatus === PAYMENT_STATUS.UNPAID) {
+      // If Unpaid, Paid = 0, Remaining = Total
       setForm(prev => ({ ...prev, paidAmount: '0', remainingAmount: calculatedTotal.toString() }));
     } else {
-      const paidAmt = parseFloat(form.paidAmount) || 0;
-      setForm(prev => ({ ...prev, remainingAmount: Math.max(calculatedTotal - paidAmt, 0).toString() }));
+      // If Partially Paid
+      // Only calculate remaining based on what is typed. 
+      // If nothing typed (empty string), treat as 0 for calculation but keep string empty
+      const currentPaid = form.paidAmount === '' ? 0 : parseFloat(form.paidAmount);
+      const remaining = Math.max(calculatedTotal - currentPaid, 0);
+      
+      setForm(prev => ({ 
+        ...prev, 
+        // We DO NOT set paidAmount here, we let the user type it.
+        remainingAmount: remaining.toString() 
+      }));
     }
   }, [form.rent, form.water, form.waste, form.prevElectricity, form.currElectricity, 
       form.electricityRate, form.internet, form.internetRate, form.paymentStatus, 
@@ -112,6 +122,12 @@ const RentForm = ({
     
     setForm(prev => {
       const newForm = { ...prev, [name]: value };
+      
+      // If switching TO Partially Paid, clear the paid amount so it's not "0"
+      if (name === 'paymentStatus' && value === PAYMENT_STATUS.PARTIALLY_PAID) {
+        newForm.paidAmount = ''; 
+      }
+      
       if (name === 'internet' && value === 'no') {
         newForm.internetRate = '';
         setSelectedInternetMonths(new Set());
@@ -132,27 +148,28 @@ const RentForm = ({
 
   const handleInternetMonthToggle = (monthName) => {
     const newSelected = new Set(selectedInternetMonths);
-    if (newSelected.has(monthName)) {
-      newSelected.delete(monthName);
-    } else {
-      newSelected.add(monthName);
-    }
+    if (newSelected.has(monthName)) newSelected.delete(monthName);
+    else newSelected.add(monthName);
     setSelectedInternetMonths(newSelected);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.month || !form.year) { alert('Please select month and year'); return; }
-    if (!form.rent || !form.currElectricity || !form.electricityRate) { alert('Please fill in required fields'); return; }
-
+    
     setIsSubmitting(true);
     try {
-      await onSubmit({
+      // If paidAmount is empty string, send 0 to backend
+      const payload = {
         ...form,
+        paidAmount: form.paidAmount === '' ? '0' : form.paidAmount,
         multiMonths,
         selectedInternetMonths: Array.from(selectedInternetMonths),
         total
-      });
+      };
+
+      await onSubmit(payload);
+      
       if (!isEditing) {
         setForm(prev => ({ ...prev, month: '', currElectricity: '', paidAmount: '', remainingAmount: '' }));
         setMultiMonths(1);
@@ -182,54 +199,56 @@ const RentForm = ({
         </div>
       )}
 
-      <div className="form-row">
-        <label>Year *</label>
-        <select name="year" value={form.year} onChange={handleChange} required>
-          <option value="">Select Year</option>
-          {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
+      <div className="form-row-group">
+        <div className="form-row">
+          <label>Year *</label>
+          <select name="year" value={form.year} onChange={handleChange} required>
+            <option value="">Select Year</option>
+            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+
+        <div className="form-row">
+          <label>Start Month *</label>
+          <select name="month" value={form.month} onChange={handleChange} required disabled={!form.year}>
+            <option value="">Select Month</option>
+            {months.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
       </div>
 
-      <div className="form-row">
-        <label>Start Month *</label>
-        <select name="month" value={form.month} onChange={handleChange} required disabled={!form.year}>
-          <option value="">Select Month</option>
-          {months.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
+      <div className="form-row-group">
+        <div className="form-row">
+          <label>Monthly Rent (Rs.) *</label>
+          <input type="number" name="rent" value={form.rent} onChange={handleChange} required min="0" step="0.01" />
+        </div>
+        <div className="form-row">
+          <label>Water (Rs.) *</label>
+          <input type="number" name="water" value={form.water} onChange={handleChange} required min="0" step="0.01" />
+        </div>
+        <div className="form-row">
+          <label>Waste (Rs.) *</label>
+          <input type="number" name="waste" value={form.waste} onChange={handleChange} required min="0" step="0.01" />
+        </div>
       </div>
 
-      <div className="form-row">
-        <label>Monthly Rent (Rs.) *</label>
-        <input type="number" name="rent" value={form.rent} onChange={handleChange} required min="0" step="0.01" />
-      </div>
-
-      <div className="form-row">
-        <label>Water (Rs.) *</label>
-        <input type="number" name="water" value={form.water} onChange={handleChange} required min="0" step="0.01" />
-      </div>
-
-      <div className="form-row">
-        <label>Waste (Rs.) *</label>
-        <input type="number" name="waste" value={form.waste} onChange={handleChange} required min="0" step="0.01" />
-      </div>
-
-      <div className="form-row">
-        <label>Previous Electricity {history.length > 0 && !isEditing && '(Auto-filled)'}</label>
-        <input 
-          type="number" name="prevElectricity" value={form.prevElectricity} onChange={handleChange} 
-          required min="0" readOnly={history.length > 0 && !isEditing}
-          style={{ backgroundColor: history.length > 0 && !isEditing ? '#f0f0f0' : 'white' }}
-        />
-      </div>
-
-      <div className="form-row">
-        <label>Current Electricity *</label>
-        <input type="number" name="currElectricity" value={form.currElectricity} onChange={handleChange} required min="0" />
-      </div>
-
-      <div className="form-row">
-        <label>Electricity Rate (Rs./unit) *</label>
-        <input type="number" name="electricityRate" value={form.electricityRate} onChange={handleChange} required min="0" step="0.01" />
+      <div className="form-row-group">
+        <div className="form-row">
+          <label>Prev. Electricity {history.length > 0 && !isEditing && '(Auto)'}</label>
+          <input 
+            type="number" name="prevElectricity" value={form.prevElectricity} onChange={handleChange} 
+            required min="0" readOnly={history.length > 0 && !isEditing}
+            style={{ backgroundColor: history.length > 0 && !isEditing ? '#f0f0f0' : 'white' }}
+          />
+        </div>
+        <div className="form-row">
+          <label>Curr. Electricity *</label>
+          <input type="number" name="currElectricity" value={form.currElectricity} onChange={handleChange} required min="0" />
+        </div>
+        <div className="form-row">
+          <label>Rate (Rs./unit) *</label>
+          <input type="number" name="electricityRate" value={form.electricityRate} onChange={handleChange} required min="0" step="0.01" />
+        </div>
       </div>
 
       <div className="form-row">
@@ -244,22 +263,18 @@ const RentForm = ({
         </div>
       </div>
 
-      {/* --- THIS IS THE RESTORED INTERNET SELECT SECTION --- */}
       {form.internet === 'yes' && form.month && (
         <div className="form-row internet-section">
           <label>Internet Rate (Rs./month)</label>
           <input 
-            type="number" 
-            name="internetRate" 
-            value={form.internetRate} 
+            type="number" name="internetRate" value={form.internetRate} 
             onChange={(e) => setForm(prev => ({ ...prev, internetRate: e.target.value }))}
             required min="0" step="0.01"
           />
-          
           <div className="internet-months">
-            <label className="internet-months-label">Select Months for Internet:</label>
+            <label className="internet-months-label">Select Months:</label>
             <div className="internet-months-grid">
-              {getCalculationMonths().map((monthName, index) => (
+              {getCalculationMonths().map((monthName) => (
                 <label key={monthName} className="checkbox-label">
                   <input
                     type="checkbox"
@@ -270,11 +285,9 @@ const RentForm = ({
                 </label>
               ))}
             </div>
-            <small className="selected-count">Selected: {selectedInternetMonths.size} month(s)</small>
           </div>
         </div>
       )}
-      {/* -------------------------------------------------- */}
 
       <div className="form-row">
         <label>Payment Status</label>
@@ -287,13 +300,21 @@ const RentForm = ({
 
       {form.paymentStatus === PAYMENT_STATUS.PARTIALLY_PAID && (
         <div className="partial-payment">
-          <div>
+          <div className="form-row">
             <label>Paid Amount</label>
-            <input type="number" name="paidAmount" value={form.paidAmount} onChange={handleChange} required min="0" />
+            <input 
+              type="number" 
+              name="paidAmount" 
+              value={form.paidAmount} 
+              onChange={handleChange} 
+              required 
+              min="0" 
+              placeholder="Enter amount"
+            />
           </div>
-          <div>
+          <div className="form-row">
             <label>Remaining</label>
-            <input type="number" name="remainingAmount" value={form.remainingAmount} readOnly style={{ backgroundColor: '#f0f0f0' }} />
+            <input type="number" name="remainingAmount" value={form.remainingAmount} readOnly style={{ backgroundColor: '#e9ecef' }} />
           </div>
         </div>
       )}

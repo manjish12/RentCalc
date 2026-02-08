@@ -20,25 +20,22 @@ export const getRents = async (req, res) => {
 
 export const createRent = async (req, res) => {
   try {
-    console.log('Received Rent Data:', req.body);
-    
     const { 
       userId, month, year, rent, prevUnit, currUnit, electricityRate, 
       water, internet, internetAmount, waste, 
-      multiMonths = 1, // Default to 1 if missing
-      selectedInternetMonths = [] // Array of month names
+      multiMonths = 1, 
+      selectedInternetMonths = [],
+      paymentStatus, // Get status from form
+      paidAmount     // Get paid amount from form
     } = req.body;
 
-    // Validation
     if (!userId || !month || !year) {
       return res.status(400).json({ error: 'userId, month, and year are required' });
     }
 
-    // --- CALCULATION LOGIC START ---
     const createdRents = [];
     const startIdx = BS_MONTHS.indexOf(month);
     
-    // Parse numbers
     const numYear = parseInt(year);
     const numRent = parseFloat(rent) || 0;
     const numWater = parseFloat(water) || 0;
@@ -49,34 +46,21 @@ export const createRent = async (req, res) => {
     let currentPrevUnit = parseFloat(prevUnit) || 0;
     const finalCurrUnit = parseFloat(currUnit) || 0;
     
-    // Calculate total electricity used
     const totalElecUsage = Math.max(finalCurrUnit - currentPrevUnit, 0);
-    // Distribute usage evenly per month
     const usagePerMonth = totalElecUsage / multiMonths;
 
     for (let i = 0; i < multiMonths; i++) {
-      // 1. Calculate Month and Year (Handling Rollover)
+      // 1. Calculate Month/Year
       const currentMonthIdx = (startIdx + i) % 12;
       const yearOffset = Math.floor((startIdx + i) / 12);
       const currentYear = numYear + yearOffset;
       const currentMonthName = BS_MONTHS[currentMonthIdx];
 
-      // 2. Check if entry already exists
-      const existing = await Rent.findOne({ 
-        userId, 
-        month: currentMonthName, 
-        year: currentYear 
-      });
+      // 2. Check duplicate
+      const existing = await Rent.findOne({ userId, month: currentMonthName, year: currentYear });
+      if (existing) continue; 
 
-      if (existing) {
-        // If it exists, we skip it or you could throw an error. 
-        // For now, let's skip to avoid crashing the whole batch.
-        console.warn(`Entry for ${currentMonthName} ${currentYear} already exists. Skipping.`);
-        continue; 
-      }
-
-      // 3. Calculate Electricity for this specific month
-      // If it's the last month, force exact match to final unit to avoid rounding errors
+      // 3. Electricity Logic
       let thisMonthCurrUnit;
       if (i === multiMonths - 1) {
         thisMonthCurrUnit = finalCurrUnit;
@@ -84,23 +68,37 @@ export const createRent = async (req, res) => {
         thisMonthCurrUnit = currentPrevUnit + usagePerMonth;
       }
       
-      // Round to 2 decimal places
       thisMonthCurrUnit = Math.round(thisMonthCurrUnit * 100) / 100;
       currentPrevUnit = Math.round(currentPrevUnit * 100) / 100;
 
-      // 4. Calculate Internet
-      // Only charge internet if: global internet is YES AND this month is in the selected list
+      // 4. Internet Logic
       const shouldChargeInternet = internet && selectedInternetMonths.includes(currentMonthName);
       const thisMonthInternetAmount = shouldChargeInternet ? numInternetAmt : 0;
 
-      // 5. Calculate Total
-      // (Rent + Water + Waste) + (Elec Usage * Rate) + Internet
+      // 5. Total Calculation
       const thisMonthElecUsage = Math.max(thisMonthCurrUnit - currentPrevUnit, 0);
       const elecCost = thisMonthElecUsage * numElecRate;
-      
       const monthlyTotal = numRent + numWater + numWaste + elecCost + thisMonthInternetAmount;
+      const roundedTotal = Math.round(monthlyTotal * 100) / 100;
 
-      // 6. Create Entry
+      // --- FIX: PAYMENT STATUS LOGIC ---
+      let finalStatus = 'unpaid';
+      let finalPaid = 0;
+      let finalRemaining = roundedTotal;
+
+      if (paymentStatus === 'paid') {
+        finalStatus = 'paid';
+        finalPaid = roundedTotal;
+        finalRemaining = 0;
+      } 
+      // If single month and partial, we use the input amount
+      else if (paymentStatus === 'partially_paid' && multiMonths === 1) {
+        finalStatus = 'partially_paid';
+        finalPaid = parseFloat(paidAmount) || 0;
+        finalRemaining = roundedTotal - finalPaid;
+      }
+      // ---------------------------------
+
       const newRent = await Rent.create({
         userId,
         month: currentMonthName,
@@ -113,26 +111,21 @@ export const createRent = async (req, res) => {
         waste: numWaste,
         internet: shouldChargeInternet,
         internetAmount: thisMonthInternetAmount,
-        total: Math.round(monthlyTotal * 100) / 100, // Round total
-        paymentStatus: 'unpaid',
-        paidAmount: 0,
-        remainingAmount: Math.round(monthlyTotal * 100) / 100
+        total: roundedTotal,
+        paymentStatus: finalStatus, // Use calculated status
+        paidAmount: finalPaid,      // Use calculated paid
+        remainingAmount: finalRemaining // Use calculated remaining
       });
 
       createdRents.push(newRent);
-
-      // Prepare prev unit for next loop iteration
       currentPrevUnit = thisMonthCurrUnit;
     }
-    // --- CALCULATION LOGIC END ---
 
-    // --- SOCKET EMIT ---
-    // Notify the tenant that data has changed
+    // Socket Emit
     const tenantSocketId = global.onlineUsers.get(userId.toString());
     if (tenantSocketId) {
       req.io.to(tenantSocketId).emit('rent-updated');
     }
-    // -------------------
     
     res.status(201).json({ 
       message: 'Rent entries created successfully', 
@@ -146,12 +139,7 @@ export const createRent = async (req, res) => {
   }
 };
 
-// ... Keep updateRent, deleteRent, applyBulkPayment, createBulkRents exactly as they were ...
-// (I will include them below so you have the full file)
-
 export const createBulkRents = async (req, res) => {
-  // NOTE: This function is for when you send an array of FULL objects manually.
-  // The createRent function above now handles the "1 form -> multiple entries" logic.
   try {
     const { entries } = req.body;
     if (!entries || !Array.isArray(entries)) return res.status(400).json({ error: 'No entries' });
@@ -171,10 +159,8 @@ export const createBulkRents = async (req, res) => {
 
 export const updateRent = async (req, res) => {
   try {
-    // Basic recalculate logic if values changed
     const { rent, water, waste, prevUnit, currUnit, electricityRate, internetAmount } = req.body;
     
-    // If these fields are present, recalculate total
     let newTotal = req.body.total;
     let newRemaining = req.body.remainingAmount;
 
@@ -182,10 +168,9 @@ export const updateRent = async (req, res) => {
        const elecCost = (parseFloat(currUnit) - parseFloat(prevUnit)) * parseFloat(electricityRate);
        newTotal = parseFloat(rent) + parseFloat(water) + parseFloat(waste) + parseFloat(internetAmount || 0) + elecCost;
        
-       // If it was unpaid, remaining = total
        if (req.body.paymentStatus === 'unpaid') newRemaining = newTotal;
-       // If partial, remaining = total - paid
        else if (req.body.paymentStatus === 'partially_paid') newRemaining = newTotal - (parseFloat(req.body.paidAmount) || 0);
+       else if (req.body.paymentStatus === 'paid') newRemaining = 0;
     }
 
     const updatedRent = await Rent.findByIdAndUpdate(
@@ -261,12 +246,6 @@ export const applyBulkPayment = async (req, res) => {
       });
 
       remainingAmount -= paymentApplied;
-    }
-
-    // Handle Surplus if "deduct" is selected (Basic implementation)
-    // In a real app, you might create a credit entry or subtract from next month
-    if (remainingAmount > 0 && surplusAction === 'deduct') {
-       // Logic to save credit could go here
     }
 
     const tenantSocketId = global.onlineUsers.get(userId.toString());
