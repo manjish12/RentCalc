@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import RentHistory from '../components/RentHistory';
 import Loading from '../components/Loading';
-import ChatWidget from '../components/ChatWidget'; // Import Chat
+import ChatWidget from '../components/ChatWidget';
 import { rentsAPI, usersAPI, notificationsAPI } from '../services/api';
 import { sortRentsByDate, formatCurrency, generateCombinedPDF } from '../utils/helpers';
 import { FiDollarSign, FiX, FiCheck, FiDownload } from 'react-icons/fi';
@@ -22,24 +22,23 @@ const TenantDashboard = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [notifying, setNotifying] = useState(false);
+  
+  // New state for owner name
+  const [ownerName, setOwnerName] = useState('Owner');
 
-  // --- SOCKET LISTENER ---
   useEffect(() => {
     if (!socket) return;
-
     socket.on('rent-updated', () => {
       toast('Your rent details have been updated', { icon: '🔄' });
       fetchHistory();
     });
-
     return () => socket.off('rent-updated');
   }, [socket]);
-  // -----------------------
 
   useEffect(() => {
     if (user?._id) {
       fetchHistory();
-      fetchQR();
+      fetchOwnerDetails(); // Fetch owner details (QR + Name)
     }
   }, [user]);
 
@@ -56,14 +55,17 @@ const TenantDashboard = () => {
     }
   };
 
-  const fetchQR = async () => {
+  const fetchOwnerDetails = async () => {
     try {
       if (user?.linkedOwnerId) {
-        const response = await usersAPI.getQR(user.linkedOwnerId);
-        setQrUrl(response.data.qrImageUrl);
+        // Fetch full owner details (QR is usually part of this or separate)
+        // Since getQR is specific, let's use getUser to get the name
+        const ownerRes = await usersAPI.getUser(user.linkedOwnerId);
+        setOwnerName(ownerRes.data.name); // Set the real name
+        setQrUrl(ownerRes.data.qrImageUrl);
       }
     } catch (error) {
-      console.error('Fetch QR error:', error);
+      console.error('Fetch owner details error:', error);
     }
   };
 
@@ -113,11 +115,7 @@ const TenantDashboard = () => {
 
       <div className="dashboard-content">
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-          <button 
-            className="btn-primary" 
-            onClick={handleDownloadReport}
-            disabled={history.length === 0}
-          >
+          <button className="btn-primary" onClick={handleDownloadReport} disabled={history.length === 0}>
             <FiDownload /> Download Full Statement
           </button>
         </div>
@@ -150,14 +148,8 @@ const TenantDashboard = () => {
         )}
 
         <div className="dashboard-section">
-          {loading ? (
-            <Loading text="Loading your rent history..." />
-          ) : (
-            <RentHistory
-              history={history}
-              userName={user?.name || 'User'}
-              showActions={false}
-            />
+          {loading ? <Loading text="Loading your rent history..." /> : (
+            <RentHistory history={history} userName={user?.name || 'User'} showActions={false} />
           )}
         </div>
       </div>
@@ -190,10 +182,10 @@ const TenantDashboard = () => {
         </div>
       )}
 
-      {/* CHAT WIDGET - Connects to linked owner */}
+      {/* CHAT WIDGET - Pass the fetched ownerName */}
       <ChatWidget 
         receiverId={user?.linkedOwnerId} 
-        receiverName="Owner" 
+        receiverName={ownerName} 
       />
     </div>
   );

@@ -1,5 +1,6 @@
 import Message from '../models/Message.js';
 
+// Get conversation between two users
 export const getMessages = async (req, res) => {
   try {
     const { otherUserId } = req.params;
@@ -18,6 +19,7 @@ export const getMessages = async (req, res) => {
   }
 };
 
+// Send a message
 export const sendMessage = async (req, res) => {
   try {
     const { receiverId, text } = req.body;
@@ -27,7 +29,7 @@ export const sendMessage = async (req, res) => {
       senderId,
       receiverId,
       text,
-      isRead: false // Default to false
+      isRead: false
     });
 
     // Real-time: Send message to receiver
@@ -42,7 +44,7 @@ export const sendMessage = async (req, res) => {
   }
 };
 
-// --- NEW FUNCTION ---
+// Mark messages as read
 export const markMessagesRead = async (req, res) => {
   try {
     const { otherUserId } = req.body;
@@ -54,13 +56,30 @@ export const markMessagesRead = async (req, res) => {
       { $set: { isRead: true } }
     );
 
-    // Real-time: Notify the SENDER (otherUserId) that I read their messages
+    // Real-time: Notify the SENDER that I read their messages
     const senderSocketId = global.onlineUsers.get(otherUserId.toString());
     if (senderSocketId) {
       req.io.to(senderSocketId).emit('messages-read', { byUserId: currentUserId });
     }
 
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// --- NEW FUNCTION: Get Unread Count ---
+export const getUnreadCount = async (req, res) => {
+  try {
+    const currentUserId = req.user._id;
+    
+    // Count messages where I am receiver AND isRead is false
+    const count = await Message.countDocuments({
+      receiverId: currentUserId,
+      isRead: false
+    });
+
+    res.json({ unreadCount: count });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

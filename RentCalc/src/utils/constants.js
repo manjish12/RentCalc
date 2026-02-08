@@ -15,4 +15,4 @@ export const PAYMENT_STATUS_LABELS = {
   partially_paid: 'Partially Paid'
 };
 
-export const DEFAULT_YEARS = [2080, 2081, 2082, 2083, 2084, 2085, 2086, 2087, 2088, 2089, 2090];
+export const DEFAULT_YEARS = [2082];

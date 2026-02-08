@@ -42,7 +42,6 @@ export const usersAPI = {
   getUser: (id) => api.get(`/users/${id}`),
   deleteUser: (id) => api.delete(`/users/${id}`),
   getQR: (id) => api.get(`/users/${id}/qr`),
-  // Send base64 directly as JSON
   uploadQR: (imageBase64) => api.post('/users/qr', { imageBase64 })
 };
 
@@ -62,11 +61,12 @@ export const notificationsAPI = {
   deleteNotification: (id) => api.delete(`/notifications/${id}`)
 };
 
+// --- UPDATED MESSAGES API ---
 export const messagesAPI = {
   getMessages: (otherUserId) => api.get(`/messages/${otherUserId}`),
   sendMessage: (receiverId, text) => api.post('/messages', { receiverId, text }),
-  // New API call
-  markMessagesRead: (otherUserId) => api.put('/messages/read', { otherUserId })
+  markMessagesRead: (otherUserId) => api.put('/messages/read', { otherUserId }),
+  getUnreadCount: () => api.get('/messages/unread-count') // New
 };
 
 export default api;
