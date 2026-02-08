@@ -42,6 +42,7 @@ export const usersAPI = {
   getUser: (id) => api.get(`/users/${id}`),
   deleteUser: (id) => api.delete(`/users/${id}`),
   getQR: (id) => api.get(`/users/${id}/qr`),
+  // Send base64 directly as JSON
   uploadQR: (imageBase64) => api.post('/users/qr', { imageBase64 })
 };
 
@@ -59,12 +60,6 @@ export const notificationsAPI = {
   createNotification: (data) => api.post('/notifications', data),
   markAllAsRead: () => api.put('/notifications/read-all'),
   deleteNotification: (id) => api.delete(`/notifications/${id}`)
-};
-
-export const uploadAPI = {
-  uploadQRImage: (formData) => api.post('/upload/qr', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
 };
 
 export default api;

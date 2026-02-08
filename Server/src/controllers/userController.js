@@ -1,12 +1,14 @@
 import User from '../models/User.js';
 import Rent from '../models/Rent.js';
 import Notification from '../models/Notification.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { v2 as cloudinary } from 'cloudinary'; // Import Cloudinary
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 export const getUsers = async (req, res) => {
   try {
@@ -18,7 +20,6 @@ export const getUsers = async (req, res) => {
     }
     res.json(users);
   } catch (error) {
-    console.error('Get users error:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -31,7 +32,6 @@ export const getUser = async (req, res) => {
     }
     res.json(user);
   } catch (error) {
-    console.error('Get user error:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -49,33 +49,20 @@ export const deleteUser = async (req, res) => {
 
     res.json({ message: 'User deleted' });
   } catch (error) {
-    console.error('Delete user error:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
-// GET QR - Fixed to handle both owner and tenant requests
 export const getQR = async (req, res) => {
   try {
-    const userId = req.params.id;
-    console.log('Getting QR for user ID:', userId);
-    
-    const user = await User.findById(userId).select('qrImageUrl role');
-    
-    if (!user) {
-      console.log('User not found for QR fetch');
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    console.log('Found user QR URL:', user.qrImageUrl);
-    res.json({ qrImageUrl: user.qrImageUrl || null });
+    const user = await User.findById(req.params.id).select('qrImageUrl');
+    res.json({ qrImageUrl: user?.qrImageUrl || null });
   } catch (error) {
-    console.error('Get QR error:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
-// UPLOAD QR - Fixed with better error handling and logging
+// --- UPDATED UPLOAD FUNCTION FOR CLOUDINARY ---
 export const uploadQR = async (req, res) => {
   try {
     const { imageBase64 } = req.body;
@@ -84,48 +71,27 @@ export const uploadQR = async (req, res) => {
       return res.status(400).json({ error: 'No image provided' });
     }
 
-    console.log('Uploading QR for user:', req.user._id);
-    console.log('Image data length:', imageBase64.length);
+    console.log('Uploading QR to Cloudinary...');
 
-    // Ensure uploads directory exists
-    const uploadsDir = path.join(__dirname, '../../uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-      console.log('Created uploads directory:', uploadsDir);
-    }
+    // Upload the Base64 string directly to Cloudinary
+    const result = await cloudinary.uploader.upload(imageBase64, {
+      folder: 'rentcalc_qrs', // Optional: Folder name in Cloudinary
+      width: 400,             // Optional: Resize
+      crop: "scale"
+    });
 
-    // Generate unique filename
-    const fileName = `qr-${req.user._id}-${Date.now()}.png`;
-    const filePath = path.join(uploadsDir, fileName);
+    console.log('Cloudinary Upload Success:', result.secure_url);
 
-    // Extract base64 data and save file
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-    fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
-    console.log('Saved QR image to:', filePath);
-
-    // Create the image URL
-    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
-    console.log('Generated image URL:', imageUrl);
-
-    // Update user in database
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user._id, 
-      { qrImageUrl: imageUrl },
-      { new: true }
-    );
-
-    if (!updatedUser) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    console.log('Updated user QR URL in database:', updatedUser.qrImageUrl);
+    // Save the Cloudinary URL to MongoDB
+    await User.findByIdAndUpdate(req.user._id, { qrImageUrl: result.secure_url });
 
     res.json({ 
-      qrImageUrl: imageUrl, 
+      qrImageUrl: result.secure_url, 
       message: 'QR uploaded successfully' 
     });
+
   } catch (error) {
-    console.error('QR upload error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Cloudinary upload error:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
   }
 };

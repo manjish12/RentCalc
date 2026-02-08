@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useSocket } from '../context/SocketContext'; // Import socket
+import { useSocket } from '../context/SocketContext';
 import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import RentHistory from '../components/RentHistory';
 import Loading from '../components/Loading';
 import { rentsAPI, usersAPI, notificationsAPI } from '../services/api';
-import { sortRentsByDate, formatCurrency } from '../utils/helpers';
-import { FiDollarSign, FiX, FiCheck } from 'react-icons/fi';
+// Import generateCombinedPDF here
+import { sortRentsByDate, formatCurrency, generateCombinedPDF } from '../utils/helpers';
+import { FiDollarSign, FiX, FiCheck, FiDownload } from 'react-icons/fi';
 import '../styles/Dashboard.css';
 import '../styles/Modal.css';
 
 const TenantDashboard = () => {
   const { user } = useAuth();
-  const { socket } = useSocket(); // Get socket
+  const { socket } = useSocket();
   
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +29,7 @@ const TenantDashboard = () => {
 
     socket.on('rent-updated', () => {
       toast('Your rent details have been updated', { icon: '🔄' });
-      fetchHistory(); // Reload data
+      fetchHistory();
     });
 
     return () => socket.off('rent-updated');
@@ -84,7 +85,7 @@ const TenantDashboard = () => {
 
     try {
       await notificationsAPI.createNotification({ message, type: 'payment' });
-      toast.success('Owner has been notified!');
+      toast.success('Owner has been notified of your payment!');
       handleCloseModal();
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to notify owner');
@@ -93,6 +94,18 @@ const TenantDashboard = () => {
     }
   };
 
+  // --- NEW: Handle PDF Download ---
+  const handleDownloadReport = () => {
+    if (history.length === 0) {
+      toast.error('No history to download');
+      return;
+    }
+    // Pass user.name so it shows correctly on the PDF
+    generateCombinedPDF(history, user.name);
+    toast.success('Downloading full report...');
+  };
+  // --------------------------------
+
   const totalDue = history.filter(h => h.paymentStatus !== 'paid').reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
   const totalPaid = history.reduce((sum, h) => sum + (h.paidAmount || 0), 0);
   const unpaidEntries = history.filter(h => h.paymentStatus !== 'paid');
@@ -100,7 +113,20 @@ const TenantDashboard = () => {
   return (
     <div className="dashboard">
       <Header />
+
       <div className="dashboard-content">
+        
+        {/* Added Download Button Here */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          <button 
+            className="btn-primary" 
+            onClick={handleDownloadReport}
+            disabled={history.length === 0}
+          >
+            <FiDownload /> Download Full Statement
+          </button>
+        </div>
+
         <div className="summary-cards">
           <div className="summary-card">
             <h3>Total Paid</h3>
@@ -111,6 +137,7 @@ const TenantDashboard = () => {
             <p className="amount due">{formatCurrency(totalDue)}</p>
           </div>
         </div>
+
         {unpaidEntries.length > 0 && (
           <div className="dashboard-section">
             <div className="unpaid-entries">
@@ -126,10 +153,20 @@ const TenantDashboard = () => {
             </div>
           </div>
         )}
+
         <div className="dashboard-section">
-          {loading ? <Loading text="Loading..." /> : <RentHistory history={history} userName={user?.name || 'User'} showActions={false} />}
+          {loading ? (
+            <Loading text="Loading your rent history..." />
+          ) : (
+            <RentHistory
+              history={history}
+              userName={user?.name || 'User'}
+              showActions={false}
+            />
+          )}
         </div>
       </div>
+
       {showPaymentModal && selectedEntry && (
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content payment-modal" onClick={(e) => e.stopPropagation()}>

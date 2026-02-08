@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BS_MONTHS, DEFAULT_YEARS, PAYMENT_STATUS } from '../utils/constants';
 import { getAvailableMonths, calculateTotal } from '../utils/helpers';
 import '../styles/RentForm.css';
+
 const RentForm = ({ 
   onSubmit, 
   initialData = null, 
@@ -31,7 +32,7 @@ const RentForm = ({
   const [total, setTotal] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize form with initial data (for editing)
+  // Initialize form
   useEffect(() => {
     if (initialData) {
       setForm({
@@ -52,7 +53,7 @@ const RentForm = ({
     }
   }, [initialData]);
 
-  // Auto-fill from last entry
+  // Auto-fill
   useEffect(() => {
     if (!isEditing && history.length > 0 && !initialData) {
       const lastEntry = history[0];
@@ -66,6 +67,15 @@ const RentForm = ({
       }));
     }
   }, [history, isEditing, initialData]);
+
+  // Reset selected internet months when duration/start month changes
+  useEffect(() => {
+    if (form.internet === 'yes') {
+      // Default: select all months
+      const months = getCalculationMonths();
+      setSelectedInternetMonths(new Set(months));
+    }
+  }, [multiMonths, form.month, form.internet]);
 
   // Calculate total
   useEffect(() => {
@@ -84,7 +94,6 @@ const RentForm = ({
 
     setTotal(calculatedTotal);
 
-    // Update payment amounts
     if (form.paymentStatus === PAYMENT_STATUS.PAID) {
       setForm(prev => ({ ...prev, paidAmount: calculatedTotal.toString(), remainingAmount: '0' }));
     } else if (form.paymentStatus === PAYMENT_STATUS.UNPAID) {
@@ -99,11 +108,7 @@ const RentForm = ({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
-    // Allow editing prevElectricity only when editing or no history
-    if (name === 'prevElectricity' && history.length > 0 && !isEditing) {
-      return;
-    }
+    if (name === 'prevElectricity' && history.length > 0 && !isEditing) return;
     
     setForm(prev => {
       const newForm = { ...prev, [name]: value };
@@ -125,22 +130,22 @@ const RentForm = ({
     return months;
   };
 
+  const handleInternetMonthToggle = (monthName) => {
+    const newSelected = new Set(selectedInternetMonths);
+    if (newSelected.has(monthName)) {
+      newSelected.delete(monthName);
+    } else {
+      newSelected.add(monthName);
+    }
+    setSelectedInternetMonths(newSelected);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validation
-    if (!form.month || !form.year) {
-      alert('Please select month and year');
-      return;
-    }
-    
-    if (!form.rent || !form.currElectricity || !form.electricityRate) {
-      alert('Please fill in all required fields');
-      return;
-    }
+    if (!form.month || !form.year) { alert('Please select month and year'); return; }
+    if (!form.rent || !form.currElectricity || !form.electricityRate) { alert('Please fill in required fields'); return; }
 
     setIsSubmitting(true);
-    
     try {
       await onSubmit({
         ...form,
@@ -148,16 +153,8 @@ const RentForm = ({
         selectedInternetMonths: Array.from(selectedInternetMonths),
         total
       });
-      
-      // Reset form after successful submit (only if not editing)
       if (!isEditing) {
-        setForm(prev => ({
-          ...prev,
-          month: '',
-          currElectricity: '',
-          paidAmount: '',
-          remainingAmount: ''
-        }));
+        setForm(prev => ({ ...prev, month: '', currElectricity: '', paidAmount: '', remainingAmount: '' }));
         setMultiMonths(1);
         setSelectedInternetMonths(new Set());
       }
@@ -194,7 +191,7 @@ const RentForm = ({
       </div>
 
       <div className="form-row">
-        <label>Month *</label>
+        <label>Start Month *</label>
         <select name="month" value={form.month} onChange={handleChange} required disabled={!form.year}>
           <option value="">Select Month</option>
           {months.map(m => <option key={m} value={m}>{m}</option>)}
@@ -203,117 +200,81 @@ const RentForm = ({
 
       <div className="form-row">
         <label>Monthly Rent (Rs.) *</label>
-        <input 
-          type="number" 
-          name="rent" 
-          value={form.rent} 
-          onChange={handleChange} 
-          required 
-          min="0" 
-          step="0.01"
-          placeholder="Enter monthly rent"
-        />
+        <input type="number" name="rent" value={form.rent} onChange={handleChange} required min="0" step="0.01" />
       </div>
 
       <div className="form-row">
         <label>Water (Rs.) *</label>
-        <input 
-          type="number" 
-          name="water" 
-          value={form.water} 
-          onChange={handleChange} 
-          required 
-          min="0" 
-          step="0.01"
-          placeholder="Enter water charge"
-        />
+        <input type="number" name="water" value={form.water} onChange={handleChange} required min="0" step="0.01" />
       </div>
 
       <div className="form-row">
         <label>Waste (Rs.) *</label>
-        <input 
-          type="number" 
-          name="waste" 
-          value={form.waste} 
-          onChange={handleChange} 
-          required 
-          min="0" 
-          step="0.01"
-          placeholder="Enter waste charge"
-        />
+        <input type="number" name="waste" value={form.waste} onChange={handleChange} required min="0" step="0.01" />
       </div>
 
       <div className="form-row">
-        <label>Previous Electricity Unit {history.length > 0 && !isEditing && '(Auto-filled)'}</label>
+        <label>Previous Electricity {history.length > 0 && !isEditing && '(Auto-filled)'}</label>
         <input 
-          type="number" 
-          name="prevElectricity" 
-          value={form.prevElectricity} 
-          onChange={handleChange} 
-          required 
-          min="0"
-          readOnly={history.length > 0 && !isEditing}
+          type="number" name="prevElectricity" value={form.prevElectricity} onChange={handleChange} 
+          required min="0" readOnly={history.length > 0 && !isEditing}
           style={{ backgroundColor: history.length > 0 && !isEditing ? '#f0f0f0' : 'white' }}
-          placeholder="Previous meter reading"
         />
       </div>
 
       <div className="form-row">
-        <label>Current Electricity Unit *</label>
-        <input 
-          type="number" 
-          name="currElectricity" 
-          value={form.currElectricity} 
-          onChange={handleChange} 
-          required 
-          min="0"
-          placeholder="Current meter reading"
-        />
+        <label>Current Electricity *</label>
+        <input type="number" name="currElectricity" value={form.currElectricity} onChange={handleChange} required min="0" />
       </div>
 
       <div className="form-row">
         <label>Electricity Rate (Rs./unit) *</label>
-        <input 
-          type="number" 
-          name="electricityRate" 
-          value={form.electricityRate} 
-          onChange={handleChange} 
-          required 
-          min="0" 
-          step="0.01"
-          placeholder="Rate per unit"
-        />
+        <input type="number" name="electricityRate" value={form.electricityRate} onChange={handleChange} required min="0" step="0.01" />
       </div>
 
       <div className="form-row">
         <label>Internet</label>
         <div className="radio-group">
           <label className="radio-label">
-            <input type="radio" name="internet" value="yes" checked={form.internet === 'yes'} onChange={handleChange} />
-            Yes
+            <input type="radio" name="internet" value="yes" checked={form.internet === 'yes'} onChange={handleChange} /> Yes
           </label>
           <label className="radio-label">
-            <input type="radio" name="internet" value="no" checked={form.internet === 'no'} onChange={handleChange} />
-            No
+            <input type="radio" name="internet" value="no" checked={form.internet === 'no'} onChange={handleChange} /> No
           </label>
         </div>
       </div>
 
-      {form.internet === 'yes' && (
-        <div className="form-row">
+      {/* --- THIS IS THE RESTORED INTERNET SELECT SECTION --- */}
+      {form.internet === 'yes' && form.month && (
+        <div className="form-row internet-section">
           <label>Internet Rate (Rs./month)</label>
           <input 
             type="number" 
             name="internetRate" 
             value={form.internetRate} 
             onChange={(e) => setForm(prev => ({ ...prev, internetRate: e.target.value }))}
-            required 
-            min="0" 
-            step="0.01"
-            placeholder="Internet charge per month"
+            required min="0" step="0.01"
           />
+          
+          <div className="internet-months">
+            <label className="internet-months-label">Select Months for Internet:</label>
+            <div className="internet-months-grid">
+              {getCalculationMonths().map((monthName, index) => (
+                <label key={monthName} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={selectedInternetMonths.has(monthName)}
+                    onChange={() => handleInternetMonthToggle(monthName)}
+                  />
+                  {monthName}
+                </label>
+              ))}
+            </div>
+            <small className="selected-count">Selected: {selectedInternetMonths.size} month(s)</small>
+          </div>
         </div>
       )}
+      {/* -------------------------------------------------- */}
 
       <div className="form-row">
         <label>Payment Status</label>
@@ -327,26 +288,12 @@ const RentForm = ({
       {form.paymentStatus === PAYMENT_STATUS.PARTIALLY_PAID && (
         <div className="partial-payment">
           <div>
-            <label>Paid Amount (Rs.)</label>
-            <input 
-              type="number" 
-              name="paidAmount" 
-              value={form.paidAmount} 
-              onChange={handleChange} 
-              required 
-              min="0"
-              placeholder="Amount paid"
-            />
+            <label>Paid Amount</label>
+            <input type="number" name="paidAmount" value={form.paidAmount} onChange={handleChange} required min="0" />
           </div>
           <div>
-            <label>Remaining (Rs.)</label>
-            <input 
-              type="number" 
-              name="remainingAmount" 
-              value={form.remainingAmount} 
-              readOnly 
-              style={{ backgroundColor: '#f0f0f0' }}
-            />
+            <label>Remaining</label>
+            <input type="number" name="remainingAmount" value={form.remainingAmount} readOnly style={{ backgroundColor: '#f0f0f0' }} />
           </div>
         </div>
       )}
@@ -360,9 +307,7 @@ const RentForm = ({
           {isSubmitting ? 'Saving...' : (isEditing ? 'Update' : 'Save')}
         </button>
         {isEditing && onCancel && (
-          <button type="button" className="btn-secondary" onClick={onCancel}>
-            Cancel
-          </button>
+          <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
         )}
       </div>
     </form>
