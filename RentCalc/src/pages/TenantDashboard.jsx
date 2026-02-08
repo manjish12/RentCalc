@@ -6,9 +6,10 @@ import Header from '../components/Header';
 import RentHistory from '../components/RentHistory';
 import Loading from '../components/Loading';
 import ChatWidget from '../components/ChatWidget';
-import { rentsAPI, usersAPI, notificationsAPI } from '../services/api';
-import { sortRentsByDate, formatCurrency } from '../utils/helpers'; // Removed generateCombinedPDF import
-import { FiDollarSign, FiX, FiCheck } from 'react-icons/fi'; // Removed FiDownload import
+// Import messagesAPI, remove notificationsAPI
+import { rentsAPI, usersAPI, messagesAPI } from '../services/api';
+import { sortRentsByDate, formatCurrency, generateCombinedPDF } from '../utils/helpers';
+import { FiDollarSign, FiX, FiCheck, FiDownload } from 'react-icons/fi';
 import '../styles/Dashboard.css';
 import '../styles/Modal.css';
 
@@ -22,6 +23,7 @@ const TenantDashboard = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [notifying, setNotifying] = useState(false);
+  
   const [ownerName, setOwnerName] = useState('Owner');
 
   useEffect(() => {
@@ -75,21 +77,38 @@ const TenantDashboard = () => {
     setSelectedEntry(null);
   };
 
+  // --- UPDATED: Send as Chat Message instead of Notification ---
   const handleNotifyOwner = async () => {
-    if (!selectedEntry) return;
+    if (!selectedEntry || !user.linkedOwnerId) return;
     setNotifying(true);
+    
     const now = new Date().toLocaleString();
-    const message = `Payment notification for ${selectedEntry.month} ${selectedEntry.year} - Amount: ${formatCurrency(selectedEntry.remainingAmount)} - Sent on ${now}`;
+    const amount = formatCurrency(selectedEntry.remainingAmount);
+    
+    // Construct a clear message
+    const messageText = `✅ PAYMENT ALERT: I have paid ${amount} for ${selectedEntry.month} ${selectedEntry.year}. (Sent: ${now})`;
 
     try {
-      await notificationsAPI.createNotification({ message, type: 'payment' });
-      toast.success('Owner has been notified of your payment!');
+      // Send as a chat message
+      await messagesAPI.sendMessage(user.linkedOwnerId, messageText);
+      
+      toast.success('Message sent to owner!');
       handleCloseModal();
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to notify owner');
+      toast.error('Failed to send message');
     } finally {
       setNotifying(false);
     }
+  };
+  // -----------------------------------------------------------
+
+  const handleDownloadReport = () => {
+    if (history.length === 0) {
+      toast.error('No history to download');
+      return;
+    }
+    generateCombinedPDF(history, user.name);
+    toast.success('Downloading full report...');
   };
 
   const totalDue = history.filter(h => h.paymentStatus !== 'paid').reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
@@ -98,11 +117,15 @@ const TenantDashboard = () => {
 
   return (
     <div className="dashboard">
-      <Header />
+      <Header /> 
 
       <div className="dashboard-content">
-        
-        {/* Summary Section */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          <button className="btn-primary" onClick={handleDownloadReport} disabled={history.length === 0}>
+            <FiDownload /> Download Full Statement
+          </button>
+        </div>
+
         <div className="summary-cards">
           <div className="summary-card">
             <h3>Total Paid</h3>
@@ -114,7 +137,6 @@ const TenantDashboard = () => {
           </div>
         </div>
 
-        {/* Pending Payments Section */}
         {unpaidEntries.length > 0 && (
           <div className="dashboard-section">
             <div className="unpaid-entries">
@@ -131,18 +153,9 @@ const TenantDashboard = () => {
           </div>
         )}
 
-        {/* Rent History Table */}
         <div className="dashboard-section">
-          {loading ? (
-            <Loading text="Loading your rent history..." />
-          ) : (
-            <RentHistory 
-              history={history} 
-              userName={user?.name || 'User'} 
-              showActions={true} /* Enable Checkboxes & Bulk Download */
-              onEdit={null}      /* Disable Edit */
-              onDelete={null}    /* Disable Delete */
-            />
+          {loading ? <Loading text="Loading..." /> : (
+            <RentHistory history={history} userName={user?.name || 'User'} showActions={false} />
           )}
         </div>
       </div>
@@ -166,7 +179,7 @@ const TenantDashboard = () => {
             <div className="modal-footer">
               <div className="payment-actions">
                 <button type="button" className="btn-primary" onClick={handleNotifyOwner} disabled={notifying} style={{ width: '100%' }}>
-                  <FiCheck /> {notifying ? 'Sending...' : "I've Paid - Notify Owner"}
+                  <FiCheck /> {notifying ? 'Sending...' : "I've Paid - Send Message"}
                 </button>
                 <button type="button" className="btn-secondary" onClick={handleCloseModal} style={{ width: '100%' }}>Cancel</button>
               </div>
@@ -175,11 +188,7 @@ const TenantDashboard = () => {
         </div>
       )}
 
-      {/* CHAT WIDGET */}
-      <ChatWidget 
-        receiverId={user?.linkedOwnerId} 
-        receiverName={ownerName} 
-      />
+      <ChatWidget receiverId={user?.linkedOwnerId} receiverName={ownerName} />
     </div>
   );
 };

@@ -23,7 +23,6 @@
   justify-content: center;
   font-size: 24px;
   transition: transform 0.3s ease;
-  position: relative; /* Essential for badge */
 }
 
 .chat-fab:hover {
@@ -33,31 +32,6 @@
 .chat-fab.open {
   transform: rotate(45deg);
   background: #e74c3c;
-}
-
-/* --- BADGE STYLES --- */
-.chat-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background-color: #ff4757;
-  color: white;
-  font-size: 12px;
-  font-weight: bold;
-  height: 24px;
-  width: 24px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid white;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-@keyframes popIn {
-  from { transform: scale(0); }
-  to { transform: scale(1); }
 }
 
 /* Chat Box */
@@ -101,7 +75,6 @@
   font-size: 14px;
   position: relative;
   word-wrap: break-word;
-  padding-bottom: 18px; /* Space for status */
 }
 
 .message.sent {
@@ -117,25 +90,6 @@
   color: #333;
   border: 1px solid #e1e8ed;
   border-bottom-left-radius: 2px;
-}
-
-.message-status {
-  position: absolute;
-  bottom: 2px;
-  right: 6px;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.7);
-  display: flex;
-  align-items: center;
-}
-
-.message-status.read {
-  color: #69f0ae; /* Green for read */
-}
-
-.message-status .double-check {
-  display: flex;
-  align-items: center;
 }
 
 .chat-input-area {
@@ -171,6 +125,7 @@
   justify-content: center;
 }
 
+/* Empty State */
 .chat-empty {
   flex: 1;
   display: flex;
@@ -188,3 +143,53 @@
     height: 60vh;
   }
 }
+/* ... existing styles ... */
+
+.message {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  position: relative;
+  word-wrap: break-word;
+  padding-bottom: 18px; /* Extra space for ticks */
+}
+
+/* ... existing .sent and .received styles ... */
+
+.message.sent {
+  align-self: flex-end;
+  background: #667eea;
+  color: white;
+  border-bottom-right-radius: 2px;
+}
+
+.message.received {
+  align-self: flex-start;
+  background: white;
+  color: #333;
+  border: 1px solid #e1e8ed;
+  border-bottom-left-radius: 2px;
+}
+
+/* --- NEW STATUS STYLES --- */
+.message-status {
+  position: absolute;
+  bottom: 2px;
+  right: 6px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7); /* Light gray for unread sent messages */
+  display: flex;
+  align-items: center;
+}
+
+.message-status.read {
+  color: #69f0ae; /* Greenish/Blue for read */
+}
+
+.message-status .double-check {
+  display: flex;
+  align-items: center;
+}
+
+/* ... existing input styles ... */

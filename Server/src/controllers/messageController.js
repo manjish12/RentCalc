@@ -73,13 +73,32 @@ export const getUnreadCount = async (req, res) => {
   try {
     const currentUserId = req.user._id;
     
-    // Count messages where I am receiver AND isRead is false
-    const count = await Message.countDocuments({
-      receiverId: currentUserId,
-      isRead: false
+    // Aggregate to count unread messages grouped by sender
+    const unreadStats = await Message.aggregate([
+      {
+        $match: {
+          receiverId: currentUserId,
+          isRead: false
+        }
+      },
+      {
+        $group: {
+          _id: "$senderId", // Group by the sender
+          count: { $sum: 1 } // Count them
+        }
+      }
+    ]);
+
+    // Calculate total
+    const totalUnread = unreadStats.reduce((acc, curr) => acc + curr.count, 0);
+
+    // Convert array to a Map-like object: { "userId1": 5, "userId2": 1 }
+    const breakdown = {};
+    unreadStats.forEach(item => {
+      breakdown[item._id] = item.count;
     });
 
-    res.json({ unreadCount: count });
+    res.json({ unreadCount: totalUnread, breakdown });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

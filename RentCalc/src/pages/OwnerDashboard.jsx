@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useSocket } from '../context/SocketContext';
 import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import UserSelect from '../components/UserSelect';
@@ -8,18 +7,16 @@ import RentForm from '../components/RentForm';
 import RentHistory from '../components/RentHistory';
 import UnpaidSummary from '../components/UnpaidSummary';
 import BulkPayment from '../components/BulkPayment';
-import NotificationModal from '../components/NotificationModal';
 import QRUpload from '../components/QRUpload';
 import Loading from '../components/Loading';
 import ChatWidget from '../components/ChatWidget'; 
-import { usersAPI, rentsAPI, notificationsAPI } from '../services/api';
-import { sortRentsByDate, formatCurrency } from '../utils/helpers'; // Added formatCurrency import
+import { usersAPI, rentsAPI } from '../services/api'; // Removed notificationsAPI
+import { sortRentsByDate, formatCurrency } from '../utils/helpers';
 import { DEFAULT_YEARS } from '../utils/constants';
 import '../styles/Dashboard.css';
 
 const OwnerDashboard = () => {
   const { user } = useAuth();
-  const { socket } = useSocket();
   
   const [users, setUsers] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -27,27 +24,12 @@ const OwnerDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [showBulkPayment, setShowBulkPayment] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [qrUrl, setQrUrl] = useState(null);
   const [qrLoading, setQrLoading] = useState(true);
   
   const [availableYears, setAvailableYears] = useState([...DEFAULT_YEARS]);
   const [showAddYear, setShowAddYear] = useState(false);
   const [newYear, setNewYear] = useState('');
-
-  // --- SOCKET LISTENER ---
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on('new-notification', (newNotif) => {
-      toast.success(`New Notification: ${newNotif.message}`);
-      setNotifications(prev => [newNotif, ...prev]);
-    });
-
-    return () => socket.off('new-notification');
-  }, [socket]);
-  // -----------------------
 
   const fetchQR = useCallback(async () => {
     if (!user?._id) return;
@@ -71,22 +53,12 @@ const OwnerDashboard = () => {
     }
   }, []);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const response = await notificationsAPI.getNotifications();
-      setNotifications(response.data);
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-    }
-  }, []);
-
   useEffect(() => {
     if (user?._id) {
       fetchUsers();
-      fetchNotifications();
       fetchQR();
     }
-  }, [user?._id, fetchUsers, fetchNotifications, fetchQR]);
+  }, [user?._id, fetchUsers, fetchQR]);
 
   useEffect(() => {
     if (selectedUserId) {
@@ -212,58 +184,34 @@ const OwnerDashboard = () => {
     }
   };
 
-  const handleDeleteNotification = async (id) => {
-    try {
-      await notificationsAPI.deleteNotification(id);
-      setNotifications(prev => prev.filter(n => n._id !== id));
-    } catch (error) {
-      toast.error('Failed to delete notification');
-    }
-  };
-
-  const handleMarkAllRead = async () => {
-    try {
-      await notificationsAPI.markAllAsRead();
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    } catch (error) {
-      toast.error('Failed to mark read');
-    }
-  };
-
   const handleQRUpload = async (qrImageUrl) => {
     setQrUrl(qrImageUrl);
     setTimeout(() => fetchQR(), 1000);
   };
 
-  // --- CALCULATE SUMMARY TOTALS ---
   const unpaidBills = history.filter(h => h.paymentStatus !== 'paid');
   const totalPaid = history.reduce((sum, h) => sum + (h.paidAmount || 0), 0);
   const totalDue = history.reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
-  // --------------------------------
-
-  const unreadNotifications = notifications.filter(n => !n.isRead).length;
+  
   const selectedUser = users.find(u => u._id === selectedUserId);
 
   if (!user) return <Loading text="Loading..." />;
 
   return (
     <div className="dashboard">
-      <Header notificationCount={unreadNotifications} onNotificationClick={() => setShowNotifications(true)} />
+      <Header /> {/* Removed notification props */}
       
       <div className="dashboard-content">
-        {/* Owner Code Banner */}
         {user?.ownerCode && (
           <div className="owner-code-banner">
             <strong>Code:</strong> <code>{user.ownerCode}</code>
           </div>
         )}
 
-        {/* QR Upload */}
         <div className="dashboard-section">
           {qrLoading ? <Loading text="Loading QR..." /> : <QRUpload currentQR={qrUrl} onUploadSuccess={handleQRUpload} />}
         </div>
 
-        {/* Year Management */}
         <div className="dashboard-section">
           <h2>Year Management</h2>
           {!showAddYear ? (
@@ -278,7 +226,6 @@ const OwnerDashboard = () => {
           <p>Available: {availableYears.join(', ')}</p>
         </div>
 
-        {/* User Selection */}
         <div className="dashboard-section">
           <h2>Select Tenant</h2>
           <UserSelect users={users} selectedUserId={selectedUserId} onSelect={handleUserSelect} onDelete={handleDeleteUser} />
@@ -286,7 +233,6 @@ const OwnerDashboard = () => {
 
         {selectedUserId && (
           <>
-            {/* --- NEW: SUMMARY CARDS FOR OWNER --- */}
             <div className="summary-cards">
               <div className="summary-card">
                 <h3>Total Paid by {selectedUser?.name}</h3>
@@ -297,7 +243,6 @@ const OwnerDashboard = () => {
                 <p className="amount due">{formatCurrency(totalDue)}</p>
               </div>
             </div>
-            {/* ------------------------------------ */}
 
             <UnpaidSummary unpaidBills={unpaidBills} onBulkPaymentClick={() => setShowBulkPayment(true)} />
             
@@ -324,15 +269,6 @@ const OwnerDashboard = () => {
           </>
         )}
       </div>
-
-      {showNotifications && (
-        <NotificationModal 
-          notifications={notifications} 
-          onClose={() => setShowNotifications(false)} 
-          onDelete={handleDeleteNotification} 
-          onMarkAllRead={handleMarkAllRead} 
-        />
-      )}
       
       <ChatWidget 
         receiverId={selectedUserId} 
