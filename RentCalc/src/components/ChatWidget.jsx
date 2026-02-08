@@ -5,8 +5,8 @@ import { useSocket } from '../context/SocketContext';
 import { messagesAPI } from '../services/api';
 import '../styles/ChatWidget.css';
 
-// Notification Sound
-const NOTIFICATION_SOUND = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+// NEW SOUND: A soft, pleasant "pop"
+const NOTIFICATION_SOUND = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3';
 
 const ChatWidget = ({ receiverId, receiverName }) => {
   const { user } = useAuth();
@@ -20,18 +20,26 @@ const ChatWidget = ({ receiverId, receiverName }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   
   const messagesEndRef = useRef(null);
-  const audioRef = useRef(new Audio(NOTIFICATION_SOUND));
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Improved Sound Function
   const playSound = () => {
     try {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(e => console.log("Audio interaction needed"));
+      const audio = new Audio(NOTIFICATION_SOUND);
+      audio.volume = 0.4; // Lower volume (40%) so it's subtle
+      
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          // Browser prevented auto-play (user hasn't clicked page yet)
+          console.log("Sound blocked by browser policy until interaction");
+        });
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Audio error", e);
     }
   };
 
@@ -56,7 +64,7 @@ const ChatWidget = ({ receiverId, receiverName }) => {
       const initChat = async () => {
         try {
           const response = await messagesAPI.getMessages(receiverId);
-          setMessages(response.data); // No decryption needed
+          setMessages(response.data);
           
           // Mark as read and reset badge
           await messagesAPI.markMessagesRead(receiverId);
