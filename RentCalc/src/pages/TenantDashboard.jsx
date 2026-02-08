@@ -8,8 +8,10 @@ import { rentsAPI, usersAPI, notificationsAPI } from '../services/api';
 import { sortRentsByDate, formatCurrency } from '../utils/helpers';
 import { FiDollarSign, FiX, FiCheck } from 'react-icons/fi';
 import '../styles/Dashboard.css';
-import '../styles/Modal.css';
+import '../styles/Modal.css'; // Ensure Modal CSS is imported
+
 const TenantDashboard = () => {
+  // ... (Keep all existing state and logic unchanged) ...
   const { user } = useAuth();
   
   const [history, setHistory] = useState([]);
@@ -149,61 +151,70 @@ const TenantDashboard = () => {
         </div>
       </div>
 
-      {/* Payment Modal */}
+      {/* Payment Modal - UPDATED STRUCTURE */}
       {showPaymentModal && selectedEntry && (
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div 
             className="modal-content payment-modal" 
             onClick={(e) => e.stopPropagation()}
           >
-            <button 
-              type="button"
-              className="modal-close"
-              onClick={handleCloseModal}
-              aria-label="Close"
-            >
-              <FiX />
-            </button>
-            
-            <h3>Pay Rent</h3>
-            <p className="payment-amount">
-              {formatCurrency(selectedEntry.remainingAmount)}
-            </p>
-            <p className="payment-period">
-              For: {selectedEntry.month} {selectedEntry.year}
-            </p>
-
-            {qrUrl ? (
-              <div className="qr-display">
-                <p>Scan QR code to pay:</p>
-                <img src={qrUrl} alt="Payment QR Code" />
-              </div>
-            ) : (
-              <p className="no-qr">
-                Owner has not uploaded a payment QR code yet. 
-                Please contact your owner for payment details.
-              </p>
-            )}
-
-            <div className="payment-actions">
-              <button
+            {/* Header */}
+            <div className="modal-header">
+              <h3>Pay Rent</h3>
+              <button 
                 type="button"
-                className="btn-primary"
-                onClick={handleNotifyOwner}
-                disabled={notifying}
-                style={{ width: '100%' }}
-              >
-                <FiCheck />
-                {notifying ? 'Sending...' : "I've Paid - Notify Owner"}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
+                className="modal-close"
                 onClick={handleCloseModal}
-                style={{ width: '100%' }}
+                aria-label="Close"
               >
-                Cancel
+                <FiX />
               </button>
+            </div>
+            
+            {/* Scrollable Body */}
+            <div className="modal-body">
+              <p className="payment-amount">
+                {formatCurrency(selectedEntry.remainingAmount)}
+              </p>
+              <p className="payment-period">
+                For: {selectedEntry.month} {selectedEntry.year}
+              </p>
+
+              {qrUrl ? (
+                <div className="qr-display">
+                  <p>Scan QR code to pay:</p>
+                  <img src={qrUrl} alt="Payment QR Code" />
+                </div>
+              ) : (
+                <p className="no-qr">
+                  Owner has not uploaded a payment QR code yet. 
+                  Please contact your owner for payment details.
+                </p>
+              )}
+            </div>
+
+            {/* Fixed Footer */}
+            <div className="modal-footer">
+              <div className="payment-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleNotifyOwner}
+                  disabled={notifying}
+                  style={{ width: '100%' }}
+                >
+                  <FiCheck />
+                  {notifying ? 'Sending...' : "I've Paid - Notify Owner"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleCloseModal}
+                  style={{ width: '100%' }}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

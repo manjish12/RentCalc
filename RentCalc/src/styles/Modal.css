@@ -82,6 +82,32 @@
   padding: 1.5rem;
   overflow-y: auto;
 }
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh; /* Limits height to viewport */
+  overflow: hidden; /* Hides overflow outside the box */
+  display: flex;    /* Enables Flexbox */
+  flex-direction: column; /* Stacks children vertically */
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Add flex: 1 here to push header up and footer down, allowing scroll in middle */
+.modal-body {
+  padding: 24px;
+  overflow-y: auto; /* Enables vertical scrolling */
+  flex: 1;          /* Takes up remaining space */
+}
+
+/* Add a footer class for the buttons */
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e1e8ed;
+  background: #fff;
+}
+
 
 .no-notifications {
   text-align: center;
