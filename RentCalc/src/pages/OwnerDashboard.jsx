@@ -11,9 +11,9 @@ import BulkPayment from '../components/BulkPayment';
 import NotificationModal from '../components/NotificationModal';
 import QRUpload from '../components/QRUpload';
 import Loading from '../components/Loading';
-import ChatWidget from '../components/ChatWidget'; // Import Chat
+import ChatWidget from '../components/ChatWidget'; 
 import { usersAPI, rentsAPI, notificationsAPI } from '../services/api';
-import { sortRentsByDate } from '../utils/helpers';
+import { sortRentsByDate, formatCurrency } from '../utils/helpers'; // Added formatCurrency import
 import { DEFAULT_YEARS } from '../utils/constants';
 import '../styles/Dashboard.css';
 
@@ -235,7 +235,12 @@ const OwnerDashboard = () => {
     setTimeout(() => fetchQR(), 1000);
   };
 
+  // --- CALCULATE SUMMARY TOTALS ---
   const unpaidBills = history.filter(h => h.paymentStatus !== 'paid');
+  const totalPaid = history.reduce((sum, h) => sum + (h.paidAmount || 0), 0);
+  const totalDue = history.reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
+  // --------------------------------
+
   const unreadNotifications = notifications.filter(n => !n.isRead).length;
   const selectedUser = users.find(u => u._id === selectedUserId);
 
@@ -244,15 +249,21 @@ const OwnerDashboard = () => {
   return (
     <div className="dashboard">
       <Header notificationCount={unreadNotifications} onNotificationClick={() => setShowNotifications(true)} />
+      
       <div className="dashboard-content">
+        {/* Owner Code Banner */}
         {user?.ownerCode && (
           <div className="owner-code-banner">
-            <strong> Owner Code:</strong> <code>{user.ownerCode}</code>
+            <strong>Code:</strong> <code>{user.ownerCode}</code>
           </div>
         )}
+
+        {/* QR Upload */}
         <div className="dashboard-section">
           {qrLoading ? <Loading text="Loading QR..." /> : <QRUpload currentQR={qrUrl} onUploadSuccess={handleQRUpload} />}
         </div>
+
+        {/* Year Management */}
         <div className="dashboard-section">
           <h2>Year Management</h2>
           {!showAddYear ? (
@@ -266,30 +277,63 @@ const OwnerDashboard = () => {
           )}
           <p>Available: {availableYears.join(', ')}</p>
         </div>
+
+        {/* User Selection */}
         <div className="dashboard-section">
           <h2>Select Tenant</h2>
           <UserSelect users={users} selectedUserId={selectedUserId} onSelect={handleUserSelect} onDelete={handleDeleteUser} />
         </div>
+
         {selectedUserId && (
           <>
+            {/* --- NEW: SUMMARY CARDS FOR OWNER --- */}
+            <div className="summary-cards">
+              <div className="summary-card">
+                <h3>Total Paid by {selectedUser?.name}</h3>
+                <p className="amount paid">{formatCurrency(totalPaid)}</p>
+              </div>
+              <div className="summary-card">
+                <h3>Total Due from {selectedUser?.name}</h3>
+                <p className="amount due">{formatCurrency(totalDue)}</p>
+              </div>
+            </div>
+            {/* ------------------------------------ */}
+
             <UnpaidSummary unpaidBills={unpaidBills} onBulkPaymentClick={() => setShowBulkPayment(true)} />
+            
             {showBulkPayment && (
               <div className="dashboard-section">
                 <BulkPayment unpaidBills={unpaidBills} onApplyPayment={handleBulkPayment} onCancel={() => setShowBulkPayment(false)} />
               </div>
             )}
+            
             <div className="dashboard-section">
               <RentForm onSubmit={handleSubmitRent} initialData={editingEntry} history={history} isEditing={!!editingEntry} onCancel={() => setEditingEntry(null)} availableYears={availableYears} />
             </div>
+            
             <div className="dashboard-section">
-              {loading ? <Loading /> : <RentHistory history={history} userName={selectedUser?.name} onEdit={handleEditRent} onDelete={handleDeleteRent} />}
+              {loading ? <Loading /> : (
+                <RentHistory 
+                  history={history} 
+                  userName={selectedUser?.name} 
+                  onEdit={handleEditRent} 
+                  onDelete={handleDeleteRent} 
+                />
+              )}
             </div>
           </>
         )}
       </div>
-      {showNotifications && <NotificationModal notifications={notifications} onClose={() => setShowNotifications(false)} onDelete={handleDeleteNotification} onMarkAllRead={handleMarkAllRead} />}
+
+      {showNotifications && (
+        <NotificationModal 
+          notifications={notifications} 
+          onClose={() => setShowNotifications(false)} 
+          onDelete={handleDeleteNotification} 
+          onMarkAllRead={handleMarkAllRead} 
+        />
+      )}
       
-      {/* CHAT WIDGET - Connects to selected tenant */}
       <ChatWidget 
         receiverId={selectedUserId} 
         receiverName={selectedUser?.name} 
