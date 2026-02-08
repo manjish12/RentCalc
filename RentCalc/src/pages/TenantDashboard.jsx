@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext'; // Import socket
 import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import RentHistory from '../components/RentHistory';
@@ -8,11 +9,11 @@ import { rentsAPI, usersAPI, notificationsAPI } from '../services/api';
 import { sortRentsByDate, formatCurrency } from '../utils/helpers';
 import { FiDollarSign, FiX, FiCheck } from 'react-icons/fi';
 import '../styles/Dashboard.css';
-import '../styles/Modal.css'; // Ensure Modal CSS is imported
+import '../styles/Modal.css';
 
 const TenantDashboard = () => {
-  // ... (Keep all existing state and logic unchanged) ...
   const { user } = useAuth();
+  const { socket } = useSocket(); // Get socket
   
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,19 @@ const TenantDashboard = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [notifying, setNotifying] = useState(false);
+
+  // --- SOCKET LISTENER ---
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('rent-updated', () => {
+      toast('Your rent details have been updated', { icon: '🔄' });
+      fetchHistory(); // Reload data
+    });
+
+    return () => socket.off('rent-updated');
+  }, [socket]);
+  // -----------------------
 
   useEffect(() => {
     if (user?._id) {
@@ -64,43 +78,29 @@ const TenantDashboard = () => {
 
   const handleNotifyOwner = async () => {
     if (!selectedEntry) return;
-
     setNotifying(true);
-    
     const now = new Date().toLocaleString();
     const message = `Payment notification for ${selectedEntry.month} ${selectedEntry.year} - Amount: ${formatCurrency(selectedEntry.remainingAmount)} - Sent on ${now}`;
 
     try {
-      await notificationsAPI.createNotification({
-        message,
-        type: 'payment'
-      });
-      
-      toast.success('Owner has been notified of your payment!');
+      await notificationsAPI.createNotification({ message, type: 'payment' });
+      toast.success('Owner has been notified!');
       handleCloseModal();
     } catch (error) {
-      console.error('Notify error:', error);
       toast.error(error.response?.data?.error || 'Failed to notify owner');
     } finally {
       setNotifying(false);
     }
   };
 
-  // Calculate summary
-  const totalDue = history
-    .filter(h => h.paymentStatus !== 'paid')
-    .reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
-
+  const totalDue = history.filter(h => h.paymentStatus !== 'paid').reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
   const totalPaid = history.reduce((sum, h) => sum + (h.paidAmount || 0), 0);
-
   const unpaidEntries = history.filter(h => h.paymentStatus !== 'paid');
 
   return (
     <div className="dashboard">
       <Header />
-
       <div className="dashboard-content">
-        {/* Summary Cards */}
         <div className="summary-cards">
           <div className="summary-card">
             <h3>Total Paid</h3>
@@ -111,8 +111,6 @@ const TenantDashboard = () => {
             <p className="amount due">{formatCurrency(totalDue)}</p>
           </div>
         </div>
-
-        {/* Pending Payments */}
         {unpaidEntries.length > 0 && (
           <div className="dashboard-section">
             <div className="unpaid-entries">
@@ -120,100 +118,40 @@ const TenantDashboard = () => {
               <div className="pending-list">
                 {unpaidEntries.map(entry => (
                   <div key={entry._id} className="pending-item">
-                    <span>
-                      <strong>{entry.month} {entry.year}</strong>: {formatCurrency(entry.remainingAmount)}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-primary btn-small"
-                      onClick={() => handlePayRent(entry)}
-                    >
-                      <FiDollarSign /> Pay Now
-                    </button>
+                    <span><strong>{entry.month} {entry.year}</strong>: {formatCurrency(entry.remainingAmount)}</span>
+                    <button type="button" className="btn-primary btn-small" onClick={() => handlePayRent(entry)}><FiDollarSign /> Pay Now</button>
                   </div>
                 ))}
               </div>
             </div>
           </div>
         )}
-
-        {/* Rent History */}
         <div className="dashboard-section">
-          {loading ? (
-            <Loading text="Loading your rent history..." />
-          ) : (
-            <RentHistory
-              history={history}
-              userName={user?.name || 'User'}
-              showActions={false}
-            />
-          )}
+          {loading ? <Loading text="Loading..." /> : <RentHistory history={history} userName={user?.name || 'User'} showActions={false} />}
         </div>
       </div>
-
-      {/* Payment Modal - UPDATED STRUCTURE */}
       {showPaymentModal && selectedEntry && (
         <div className="modal-overlay" onClick={handleCloseModal}>
-          <div 
-            className="modal-content payment-modal" 
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
+          <div className="modal-content payment-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Pay Rent</h3>
-              <button 
-                type="button"
-                className="modal-close"
-                onClick={handleCloseModal}
-                aria-label="Close"
-              >
-                <FiX />
-              </button>
+              <button type="button" className="modal-close" onClick={handleCloseModal}><FiX /></button>
             </div>
-            
-            {/* Scrollable Body */}
             <div className="modal-body">
-              <p className="payment-amount">
-                {formatCurrency(selectedEntry.remainingAmount)}
-              </p>
-              <p className="payment-period">
-                For: {selectedEntry.month} {selectedEntry.year}
-              </p>
-
+              <p className="payment-amount">{formatCurrency(selectedEntry.remainingAmount)}</p>
+              <p className="payment-period">For: {selectedEntry.month} {selectedEntry.year}</p>
               {qrUrl ? (
-                <div className="qr-display">
-                  <p>Scan QR code to pay:</p>
-                  <img src={qrUrl} alt="Payment QR Code" />
-                </div>
+                <div className="qr-display"><p>Scan to pay:</p><img src={qrUrl} alt="QR Code" /></div>
               ) : (
-                <p className="no-qr">
-                  Owner has not uploaded a payment QR code yet. 
-                  Please contact your owner for payment details.
-                </p>
+                <p className="no-qr">No QR code available.</p>
               )}
             </div>
-
-            {/* Fixed Footer */}
             <div className="modal-footer">
               <div className="payment-actions">
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleNotifyOwner}
-                  disabled={notifying}
-                  style={{ width: '100%' }}
-                >
-                  <FiCheck />
-                  {notifying ? 'Sending...' : "I've Paid - Notify Owner"}
+                <button type="button" className="btn-primary" onClick={handleNotifyOwner} disabled={notifying} style={{ width: '100%' }}>
+                  <FiCheck /> {notifying ? 'Sending...' : "I've Paid - Notify Owner"}
                 </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={handleCloseModal}
-                  style={{ width: '100%' }}
-                >
-                  Cancel
-                </button>
+                <button type="button" className="btn-secondary" onClick={handleCloseModal} style={{ width: '100%' }}>Cancel</button>
               </div>
             </div>
           </div>

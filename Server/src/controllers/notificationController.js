@@ -28,6 +28,14 @@ export const createNotification = async (req, res) => {
     });
 
     await notification.populate('tenantId', 'name email');
+
+    // --- SOCKET EMIT ---
+    const ownerSocketId = global.onlineUsers.get(req.user.linkedOwnerId.toString());
+    if (ownerSocketId) {
+      req.io.to(ownerSocketId).emit('new-notification', notification);
+    }
+    // -------------------
+
     res.status(201).json(notification);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -55,7 +63,6 @@ export const deleteNotification = async (req, res) => {
   }
 };
 
-// ADD THIS MISSING FUNCTION
 export const getNotificationCount = async (req, res) => {
   try {
     const count = await Notification.countDocuments({
