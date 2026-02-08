@@ -6,10 +6,9 @@ import Header from '../components/Header';
 import RentHistory from '../components/RentHistory';
 import Loading from '../components/Loading';
 import ChatWidget from '../components/ChatWidget';
-// Import messagesAPI, remove notificationsAPI
 import { rentsAPI, usersAPI, messagesAPI } from '../services/api';
-import { sortRentsByDate, formatCurrency, generateCombinedPDF } from '../utils/helpers';
-import { FiDollarSign, FiX, FiCheck, FiDownload } from 'react-icons/fi';
+import { sortRentsByDate, formatCurrency } from '../utils/helpers';
+import { FiDollarSign, FiX, FiCheck } from 'react-icons/fi';
 import '../styles/Dashboard.css';
 import '../styles/Modal.css';
 
@@ -77,21 +76,15 @@ const TenantDashboard = () => {
     setSelectedEntry(null);
   };
 
-  // --- UPDATED: Send as Chat Message instead of Notification ---
   const handleNotifyOwner = async () => {
     if (!selectedEntry || !user.linkedOwnerId) return;
     setNotifying(true);
     
     const now = new Date().toLocaleString();
-    const amount = formatCurrency(selectedEntry.remainingAmount);
-    
-    // Construct a clear message
-    const messageText = `✅ PAYMENT ALERT: I have paid ${amount} for ${selectedEntry.month} ${selectedEntry.year}. (Sent: ${now})`;
+    const messageText = `✅ PAYMENT ALERT: I have paid ${formatCurrency(selectedEntry.remainingAmount)} for ${selectedEntry.month} ${selectedEntry.year}. (Sent: ${now})`;
 
     try {
-      // Send as a chat message
       await messagesAPI.sendMessage(user.linkedOwnerId, messageText);
-      
       toast.success('Message sent to owner!');
       handleCloseModal();
     } catch (error) {
@@ -99,16 +92,6 @@ const TenantDashboard = () => {
     } finally {
       setNotifying(false);
     }
-  };
-  // -----------------------------------------------------------
-
-  const handleDownloadReport = () => {
-    if (history.length === 0) {
-      toast.error('No history to download');
-      return;
-    }
-    generateCombinedPDF(history, user.name);
-    toast.success('Downloading full report...');
   };
 
   const totalDue = history.filter(h => h.paymentStatus !== 'paid').reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
@@ -120,11 +103,8 @@ const TenantDashboard = () => {
       <Header /> 
 
       <div className="dashboard-content">
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-          <button className="btn-primary" onClick={handleDownloadReport} disabled={history.length === 0}>
-            <FiDownload /> Download Full Statement
-          </button>
-        </div>
+        
+        {/* Removed the top button because RentHistory now handles bulk downloads */}
 
         <div className="summary-cards">
           <div className="summary-card">
@@ -154,8 +134,19 @@ const TenantDashboard = () => {
         )}
 
         <div className="dashboard-section">
-          {loading ? <Loading text="Loading..." /> : (
-            <RentHistory history={history} userName={user?.name || 'User'} showActions={false} />
+          {loading ? (
+            <Loading text="Loading..." />
+          ) : (
+            <RentHistory 
+              history={history} 
+              userName={user?.name || 'User'} 
+              
+              /* --- THIS ENABLES BULK DOWNLOAD --- */
+              showActions={true} 
+              onEdit={null} /* Disable Edit */
+              onDelete={null} /* Disable Delete */
+              /* --------------------------------- */
+            />
           )}
         </div>
       </div>
