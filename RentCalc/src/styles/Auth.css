@@ -192,3 +192,40 @@
     flex-direction: column;
   }
 }
+/* ... keep your existing styles above ... */
+
+/* --- PASSWORD TOGGLE STYLES --- */
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 45px !important; /* Make space for the icon so text doesn't hide behind it */
+}
+
+.password-toggle-icon {
+  position: absolute;
+  right: 15px;      /* Distance from the right edge */
+  top: 50%;         /* Center vertically */
+  transform: translateY(-50%); /* Perfect vertical center */
+  cursor: pointer;
+  color: #999;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;      /* Ensure it sits on top of the input */
+  background: transparent;
+  border: none;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.password-toggle-icon:hover {
+  color: #667eea;
+}
