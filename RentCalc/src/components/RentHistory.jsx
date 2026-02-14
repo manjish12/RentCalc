@@ -35,16 +35,28 @@ const RentHistory = ({
     setSelectedEntries(newSelected);
   };
 
+  // --- BULK DELETE LOGIC ---
   const handleDeleteSelected = async () => {
-    // Safety check: ensure onDelete exists
     if (!onDelete) return; 
     
-    if (selectedEntries.size === 0 || !window.confirm(`Delete ${selectedEntries.size} entries?`)) return;
+    // Single Alert for Bulk Action
+    if (window.confirm(`Are you sure you want to delete these ${selectedEntries.size} records? This cannot be undone.`)) {
+      // Loop through and delete without asking again
+      for (const id of selectedEntries) {
+        await onDelete(id);
+      }
+      setSelectedEntries(new Set());
+    }
+  };
+
+  // --- SINGLE DELETE LOGIC ---
+  const handleSingleDelete = async (id) => {
+    if (!onDelete) return;
     
-    for (const id of selectedEntries) {
+    // Single Alert for Single Action
+    if (window.confirm("Are you sure you want to delete this entry?")) {
       await onDelete(id);
     }
-    setSelectedEntries(new Set());
   };
 
   const handleDownloadSelected = () => {
@@ -65,7 +77,6 @@ const RentHistory = ({
         
         {showActions && (
           <div className="bulk-actions">
-            {/* Only show Delete button if onDelete is provided (Owner only) */}
             {onDelete && (
               <button 
                 className="btn-danger btn-small" 
@@ -76,7 +87,6 @@ const RentHistory = ({
               </button>
             )}
             
-            {/* Always show Download button for both Owner and Tenant */}
             <button 
               className="btn-primary btn-small" 
               onClick={handleDownloadSelected} 
@@ -136,21 +146,22 @@ const RentHistory = ({
                   </span>
                 </td>
                 <td className="actions">
-                  {/* Only show Edit button if onEdit is provided */}
                   {showActions && onEdit && (
                     <button className="btn-icon" onClick={() => onEdit(entry)} title="Edit">
                       <FiEdit2 />
                     </button>
                   )}
                   
-                  {/* Only show Delete button if onDelete is provided */}
                   {showActions && onDelete && (
-                    <button className="btn-icon btn-danger-icon" onClick={() => onDelete(entry._id)} title="Delete">
+                    <button 
+                      className="btn-icon btn-danger-icon" 
+                      onClick={() => handleSingleDelete(entry._id)} 
+                      title="Delete"
+                    >
                       <FiTrash2 />
                     </button>
                   )}
                   
-                  {/* Always show Single PDF download */}
                   <button className="btn-icon" onClick={() => generateSinglePDF(entry, userName)} title="Download">
                     <FiDownload />
                   </button>

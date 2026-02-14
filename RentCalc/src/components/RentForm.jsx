@@ -23,7 +23,7 @@ const RentForm = ({
     internet: 'no',
     internetRate: '',
     paymentStatus: PAYMENT_STATUS.PAID,
-    paidAmount: '', // Starts empty
+    paidAmount: '',
     remainingAmount: ''
   });
   
@@ -32,7 +32,7 @@ const RentForm = ({
   const [total, setTotal] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize form
+  // Initialize form from initialData
   useEffect(() => {
     if (initialData) {
       setForm({
@@ -53,7 +53,7 @@ const RentForm = ({
     }
   }, [initialData]);
 
-  // Auto-fill
+  // Auto-fill from last history entry for new rents
   useEffect(() => {
     if (!isEditing && history.length > 0 && !initialData) {
       const lastEntry = history[0];
@@ -68,7 +68,7 @@ const RentForm = ({
     }
   }, [history, isEditing, initialData]);
 
-  // Handle Internet Month Selection Default
+  // Default internet-months when internet is yes
   useEffect(() => {
     if (form.internet === 'yes') {
       const months = getCalculationMonths();
@@ -76,7 +76,7 @@ const RentForm = ({
     }
   }, [multiMonths, form.month, form.internet]);
 
-  // --- CHANGED LOGIC HERE FOR 0 VS EMPTY ---
+  // Recalculate total + remaining on any relevant change
   useEffect(() => {
     const calculatedTotal = calculateTotal({
       rent: parseFloat(form.rent) || 0,
@@ -94,27 +94,31 @@ const RentForm = ({
     setTotal(calculatedTotal);
 
     if (form.paymentStatus === PAYMENT_STATUS.PAID) {
-      // If Paid, Paid = Total, Remaining = 0
       setForm(prev => ({ ...prev, paidAmount: calculatedTotal.toString(), remainingAmount: '0' }));
     } else if (form.paymentStatus === PAYMENT_STATUS.UNPAID) {
-      // If Unpaid, Paid = 0, Remaining = Total
       setForm(prev => ({ ...prev, paidAmount: '0', remainingAmount: calculatedTotal.toString() }));
     } else {
-      // If Partially Paid
-      // Only calculate remaining based on what is typed. 
-      // If nothing typed (empty string), treat as 0 for calculation but keep string empty
       const currentPaid = form.paidAmount === '' ? 0 : parseFloat(form.paidAmount);
       const remaining = Math.max(calculatedTotal - currentPaid, 0);
-      
       setForm(prev => ({ 
         ...prev, 
-        // We DO NOT set paidAmount here, we let the user type it.
         remainingAmount: remaining.toString() 
       }));
     }
-  }, [form.rent, form.water, form.waste, form.prevElectricity, form.currElectricity, 
-      form.electricityRate, form.internet, form.internetRate, form.paymentStatus, 
-      form.paidAmount, multiMonths, selectedInternetMonths]);
+  }, [
+    form.rent,
+    form.water,
+    form.waste,
+    form.prevElectricity,
+    form.currElectricity,
+    form.electricityRate,
+    form.internet,
+    form.internetRate,
+    form.paymentStatus,
+    form.paidAmount,
+    multiMonths,
+    selectedInternetMonths
+  ]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -123,9 +127,8 @@ const RentForm = ({
     setForm(prev => {
       const newForm = { ...prev, [name]: value };
       
-      // If switching TO Partially Paid, clear the paid amount so it's not "0"
       if (name === 'paymentStatus' && value === PAYMENT_STATUS.PARTIALLY_PAID) {
-        newForm.paidAmount = ''; 
+        newForm.paidAmount = '';
       }
       
       if (name === 'internet' && value === 'no') {
@@ -155,13 +158,24 @@ const RentForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.month || !form.year) { alert('Please select month and year'); return; }
+    if (!form.month || !form.year) {
+      alert('Please select month and year');
+      return;
+    }
+
+    // 🔹 VALIDATION: current reading cannot be less than previous
+    const prev = parseFloat(form.prevElectricity);
+    const curr = parseFloat(form.currElectricity);
+    if (!isNaN(prev) && !isNaN(curr) && curr < prev) {
+      alert('Current electricity unit cannot be less than previous unit.');
+      return;
+    }
     
     setIsSubmitting(true);
     try {
-      // If paidAmount is empty string, send 0 to backend
       const payload = {
         ...form,
+        // If paidAmount is empty string, send 0 to backend
         paidAmount: form.paidAmount === '' ? '0' : form.paidAmount,
         multiMonths,
         selectedInternetMonths: Array.from(selectedInternetMonths),
@@ -171,7 +185,13 @@ const RentForm = ({
       await onSubmit(payload);
       
       if (!isEditing) {
-        setForm(prev => ({ ...prev, month: '', currElectricity: '', paidAmount: '', remainingAmount: '' }));
+        setForm(prev => ({ 
+          ...prev, 
+          month: '', 
+          currElectricity: '', 
+          paidAmount: '', 
+          remainingAmount: '' 
+        }));
         setMultiMonths(1);
         setSelectedInternetMonths(new Set());
       }
@@ -210,7 +230,13 @@ const RentForm = ({
 
         <div className="form-row">
           <label>Start Month *</label>
-          <select name="month" value={form.month} onChange={handleChange} required disabled={!form.year}>
+          <select
+            name="month"
+            value={form.month}
+            onChange={handleChange}
+            required
+            disabled={!form.year}
+          >
             <option value="">Select Month</option>
             {months.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
@@ -220,15 +246,39 @@ const RentForm = ({
       <div className="form-row-group">
         <div className="form-row">
           <label>Monthly Rent (Rs.) *</label>
-          <input type="number" name="rent" value={form.rent} onChange={handleChange} required min="0" step="0.01" />
+          <input
+            type="number"
+            name="rent"
+            value={form.rent}
+            onChange={handleChange}
+            required
+            min="0"
+            step="0.01"
+          />
         </div>
         <div className="form-row">
           <label>Water (Rs.) *</label>
-          <input type="number" name="water" value={form.water} onChange={handleChange} required min="0" step="0.01" />
+          <input
+            type="number"
+            name="water"
+            value={form.water}
+            onChange={handleChange}
+            required
+            min="0"
+            step="0.01"
+          />
         </div>
         <div className="form-row">
           <label>Waste (Rs.) *</label>
-          <input type="number" name="waste" value={form.waste} onChange={handleChange} required min="0" step="0.01" />
+          <input
+            type="number"
+            name="waste"
+            value={form.waste}
+            onChange={handleChange}
+            required
+            min="0"
+            step="0.01"
+          />
         </div>
       </div>
 
@@ -236,18 +286,38 @@ const RentForm = ({
         <div className="form-row">
           <label>Prev. Electricity {history.length > 0 && !isEditing && '(Auto)'}</label>
           <input 
-            type="number" name="prevElectricity" value={form.prevElectricity} onChange={handleChange} 
-            required min="0" readOnly={history.length > 0 && !isEditing}
+            type="number"
+            name="prevElectricity"
+            value={form.prevElectricity}
+            onChange={handleChange}
+            required
+            min="0"
+            readOnly={history.length > 0 && !isEditing}
             style={{ backgroundColor: history.length > 0 && !isEditing ? '#f0f0f0' : 'white' }}
           />
         </div>
         <div className="form-row">
           <label>Curr. Electricity *</label>
-          <input type="number" name="currElectricity" value={form.currElectricity} onChange={handleChange} required min="0" />
+          <input
+            type="number"
+            name="currElectricity"
+            value={form.currElectricity}
+            onChange={handleChange}
+            required
+            min={form.prevElectricity || 0}   // 🔹 prevents typing lower than previous
+          />
         </div>
         <div className="form-row">
           <label>Rate (Rs./unit) *</label>
-          <input type="number" name="electricityRate" value={form.electricityRate} onChange={handleChange} required min="0" step="0.01" />
+          <input
+            type="number"
+            name="electricityRate"
+            value={form.electricityRate}
+            onChange={handleChange}
+            required
+            min="0"
+            step="0.01"
+          />
         </div>
       </div>
 
@@ -255,10 +325,24 @@ const RentForm = ({
         <label>Internet</label>
         <div className="radio-group">
           <label className="radio-label">
-            <input type="radio" name="internet" value="yes" checked={form.internet === 'yes'} onChange={handleChange} /> Yes
+            <input
+              type="radio"
+              name="internet"
+              value="yes"
+              checked={form.internet === 'yes'}
+              onChange={handleChange}
+            />{' '}
+            Yes
           </label>
           <label className="radio-label">
-            <input type="radio" name="internet" value="no" checked={form.internet === 'no'} onChange={handleChange} /> No
+            <input
+              type="radio"
+              name="internet"
+              value="no"
+              checked={form.internet === 'no'}
+              onChange={handleChange}
+            />{' '}
+            No
           </label>
         </div>
       </div>
@@ -267,9 +351,13 @@ const RentForm = ({
         <div className="form-row internet-section">
           <label>Internet Rate (Rs./month)</label>
           <input 
-            type="number" name="internetRate" value={form.internetRate} 
+            type="number"
+            name="internetRate"
+            value={form.internetRate}
             onChange={(e) => setForm(prev => ({ ...prev, internetRate: e.target.value }))}
-            required min="0" step="0.01"
+            required
+            min="0"
+            step="0.01"
           />
           <div className="internet-months">
             <label className="internet-months-label">Select Months:</label>
@@ -291,7 +379,12 @@ const RentForm = ({
 
       <div className="form-row">
         <label>Payment Status</label>
-        <select name="paymentStatus" value={form.paymentStatus} onChange={handleChange} required>
+        <select
+          name="paymentStatus"
+          value={form.paymentStatus}
+          onChange={handleChange}
+          required
+        >
           <option value={PAYMENT_STATUS.PAID}>Paid</option>
           <option value={PAYMENT_STATUS.UNPAID}>Unpaid</option>
           <option value={PAYMENT_STATUS.PARTIALLY_PAID}>Partially Paid</option>
@@ -303,18 +396,24 @@ const RentForm = ({
           <div className="form-row">
             <label>Paid Amount</label>
             <input 
-              type="number" 
-              name="paidAmount" 
-              value={form.paidAmount} 
-              onChange={handleChange} 
-              required 
-              min="0" 
+              type="number"
+              name="paidAmount"
+              value={form.paidAmount}
+              onChange={handleChange}
+              required
+              min="0"
               placeholder="Enter amount"
             />
           </div>
           <div className="form-row">
             <label>Remaining</label>
-            <input type="number" name="remainingAmount" value={form.remainingAmount} readOnly style={{ backgroundColor: '#e9ecef' }} />
+            <input
+              type="number"
+              name="remainingAmount"
+              value={form.remainingAmount}
+              readOnly
+              style={{ backgroundColor: '#e9ecef' }}
+            />
           </div>
         </div>
       )}
@@ -328,7 +427,9 @@ const RentForm = ({
           {isSubmitting ? 'Saving...' : (isEditing ? 'Update' : 'Save')}
         </button>
         {isEditing && onCancel && (
-          <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+          <button type="button" className="btn-secondary" onClick={onCancel}>
+            Cancel
+          </button>
         )}
       </div>
     </form>

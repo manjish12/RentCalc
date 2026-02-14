@@ -26,48 +26,28 @@ const Login = () => {
           <h1>RentCalc</h1>
           <p>Sign in to your account</p>
         </div>
-
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
             <label htmlFor="email"><FiMail /> Email</label>
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              required
-            />
+            <input type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" required />
           </div>
-
           <div className="form-group">
             <label htmlFor="password"><FiLock /> Password</label>
-            {/* Wrapper for Input + Eye Icon */}
             <div className="password-input-wrapper">
-              <input
-                type={showPassword ? "text" : "password"}
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-              />
-              <button
-                type="button"
-                className="password-toggle-icon"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex="-1" // Prevents tabbing to the icon
-              >
+              <input type={showPassword ? "text" : "password"} id="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required />
+              <button type="button" className="password-toggle-icon" onClick={() => setShowPassword(!showPassword)} tabIndex="-1">
                 {showPassword ? <FiEyeOff /> : <FiEye />}
               </button>
             </div>
           </div>
-
+          <div style={{ textAlign: 'right', fontSize: '12px' }}>
+          
+            <p style={{ margin: 0, color: '#666' }}>Tenant forgot password? Contact your Owner.</p>
+          </div>
           <button type="submit" className="auth-btn" disabled={loading}>
             <FiLogIn /> {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
         <div className="auth-footer">
           <p>Don't have an account? <Link to="/register">Register here</Link></p>
         </div>

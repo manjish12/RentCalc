@@ -1,17 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { FiLogOut, FiBell, FiUser } from 'react-icons/fi';
+import { FiLogOut, FiUser, FiLock } from 'react-icons/fi';
+import ChangePasswordModal from './ChangePasswordModal';
 import '../styles/Header.css';
-const Header = ({ notificationCount = 0, onNotificationClick }) => {
-  const { user, logout } = useAuth();
 
-  const handleNotificationClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onNotificationClick) {
-      onNotificationClick();
-    }
-  };
+const Header = () => {
+  const { user, logout } = useAuth();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   const handleLogout = (e) => {
     e.preventDefault();
@@ -19,42 +14,27 @@ const Header = ({ notificationCount = 0, onNotificationClick }) => {
   };
 
   return (
-    <header className="header">
-      <div className="header-left">
-        <h1 className="header-title">RentCalc</h1>
-        <span className="header-role">{user?.role}</span>
-      </div>
-      
-      <div className="header-right">
-        <div className="header-user">
-          <FiUser className="header-icon" />
-          <span>{user?.name}</span>
+    <>
+      <header className="header">
+        <div className="header-left">
+          <h1 className="header-title">RentCalc</h1>
+          <span className="header-role">{user?.role}</span>
         </div>
-        
-        {user?.role === 'owner' && onNotificationClick && (
-          <button 
-            type="button"
-            className="header-notification-btn"
-            onClick={handleNotificationClick}
-            aria-label="Notifications"
-          >
-            <FiBell className="header-icon" />
-            {notificationCount > 0 && (
-              <span className="notification-badge">{notificationCount}</span>
-            )}
+        <div className="header-right">
+          <div className="header-user">
+            <FiUser className="header-icon" />
+            <span>{user?.name}</span>
+          </div>
+          <button type="button" className="header-logout-btn" onClick={() => setShowPasswordModal(true)} title="Change Password" style={{ background: '#f8f9fa', color: '#555', border: '1px solid #e1e8ed', marginRight: '5px' }}>
+            <FiLock className="header-icon" />
           </button>
-        )}
-        
-        <button 
-          type="button"
-          className="header-logout-btn" 
-          onClick={handleLogout}
-        >
-          <FiLogOut className="header-icon" />
-          <span>Logout</span>
-        </button>
-      </div>
-    </header>
+          <button type="button" className="header-logout-btn" onClick={handleLogout} title="Logout">
+            <FiLogOut className="header-icon" />
+          </button>
+        </div>
+      </header>
+      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
+    </>
   );
 };
 

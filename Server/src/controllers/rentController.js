@@ -25,8 +25,8 @@ export const createRent = async (req, res) => {
       water, internet, internetAmount, waste, 
       multiMonths = 1, 
       selectedInternetMonths = [],
-      paymentStatus, // Get status from form
-      paidAmount     // Get paid amount from form
+      paymentStatus, 
+      paidAmount 
     } = req.body;
 
     if (!userId || !month || !year) {
@@ -48,6 +48,14 @@ export const createRent = async (req, res) => {
     
     const totalElecUsage = Math.max(finalCurrUnit - currentPrevUnit, 0);
     const usagePerMonth = totalElecUsage / multiMonths;
+
+    // --- FIX 1: TRACK DISTRIBUTABLE PAYMENT ---
+    // This variable acts like a wallet. We deduct from it as we create months.
+    let distributablePaidAmount = 0;
+    if (paymentStatus === 'partially_paid') {
+      distributablePaidAmount = parseFloat(paidAmount) || 0;
+    }
+    // ------------------------------------------
 
     for (let i = 0; i < multiMonths; i++) {
       // 1. Calculate Month/Year
@@ -81,7 +89,7 @@ export const createRent = async (req, res) => {
       const monthlyTotal = numRent + numWater + numWaste + elecCost + thisMonthInternetAmount;
       const roundedTotal = Math.round(monthlyTotal * 100) / 100;
 
-      // --- FIX: PAYMENT STATUS LOGIC ---
+      // --- FIX 1 CONTINUED: APPLY PAYMENT LOGIC PER MONTH ---
       let finalStatus = 'unpaid';
       let finalPaid = 0;
       let finalRemaining = roundedTotal;
@@ -91,13 +99,28 @@ export const createRent = async (req, res) => {
         finalPaid = roundedTotal;
         finalRemaining = 0;
       } 
-      // If single month and partial, we use the input amount
-      else if (paymentStatus === 'partially_paid' && multiMonths === 1) {
-        finalStatus = 'partially_paid';
-        finalPaid = parseFloat(paidAmount) || 0;
+      else if (paymentStatus === 'partially_paid') {
+        // Take whatever is left in the "wallet", up to the total needed for this month
+        finalPaid = Math.min(distributablePaidAmount, roundedTotal);
+        finalPaid = Math.round(finalPaid * 100) / 100;
+        
         finalRemaining = roundedTotal - finalPaid;
+        finalRemaining = Math.round(finalRemaining * 100) / 100;
+
+        // Deduct used amount from the wallet
+        distributablePaidAmount -= finalPaid;
+
+        // Determine status based on what we could afford
+        if (finalRemaining <= 0.5) { // Allow small float margin
+          finalStatus = 'paid';
+          finalRemaining = 0;
+        } else if (finalPaid > 0) {
+          finalStatus = 'partially_paid';
+        } else {
+          finalStatus = 'unpaid';
+        }
       }
-      // ---------------------------------
+      // -----------------------------------------------------
 
       const newRent = await Rent.create({
         userId,
@@ -112,16 +135,15 @@ export const createRent = async (req, res) => {
         internet: shouldChargeInternet,
         internetAmount: thisMonthInternetAmount,
         total: roundedTotal,
-        paymentStatus: finalStatus, // Use calculated status
-        paidAmount: finalPaid,      // Use calculated paid
-        remainingAmount: finalRemaining // Use calculated remaining
+        paymentStatus: finalStatus,
+        paidAmount: finalPaid,
+        remainingAmount: finalRemaining
       });
 
       createdRents.push(newRent);
       currentPrevUnit = thisMonthCurrUnit;
     }
 
-    // Socket Emit
     const tenantSocketId = global.onlineUsers.get(userId.toString());
     if (tenantSocketId) {
       req.io.to(tenantSocketId).emit('rent-updated');
@@ -168,9 +190,13 @@ export const updateRent = async (req, res) => {
        const elecCost = (parseFloat(currUnit) - parseFloat(prevUnit)) * parseFloat(electricityRate);
        newTotal = parseFloat(rent) + parseFloat(water) + parseFloat(waste) + parseFloat(internetAmount || 0) + elecCost;
        
-       if (req.body.paymentStatus === 'unpaid') newRemaining = newTotal;
-       else if (req.body.paymentStatus === 'partially_paid') newRemaining = newTotal - (parseFloat(req.body.paidAmount) || 0);
-       else if (req.body.paymentStatus === 'paid') newRemaining = 0;
+       if (req.body.paymentStatus === 'unpaid') {
+         newRemaining = newTotal;
+       } else if (req.body.paymentStatus === 'partially_paid') {
+         newRemaining = newTotal - (parseFloat(req.body.paidAmount) || 0);
+       } else if (req.body.paymentStatus === 'paid') {
+         newRemaining = 0;
+       }
     }
 
     const updatedRent = await Rent.findByIdAndUpdate(
@@ -215,14 +241,23 @@ export const applyBulkPayment = async (req, res) => {
   try {
     const { userId, amount, surplusAction } = req.body;
 
-    const unpaidRents = await Rent.find({ 
+    // Fetch all unpaid rents
+    let unpaidRents = await Rent.find({ 
       userId, 
       paymentStatus: { $ne: 'paid' } 
-    }).sort({ year: 1, month: 1 });
+    });
 
     if (unpaidRents.length === 0) {
       return res.status(400).json({ error: 'No unpaid rents found' });
     }
+
+    // --- FIX 2: STRICT SORTING (OLDEST FIRST) ---
+    // We sort by Year Ascending, then Month Index Ascending
+    unpaidRents.sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return BS_MONTHS.indexOf(a.month) - BS_MONTHS.indexOf(b.month);
+    });
+    // --------------------------------------------
 
     let remainingAmount = parseFloat(amount);
     const updates = [];
@@ -235,9 +270,17 @@ export const applyBulkPayment = async (req, res) => {
 
       rent.paidAmount = (rent.paidAmount || 0) + paymentApplied;
       rent.remainingAmount = dueAmount - paymentApplied;
-      rent.paymentStatus = rent.remainingAmount === 0 ? 'paid' : 'partially_paid';
+      
+      // Update Status based on remaining amount
+      if (rent.remainingAmount <= 0.5) { // Tolerance for floats
+        rent.paymentStatus = 'paid';
+        rent.remainingAmount = 0;
+      } else {
+        rent.paymentStatus = 'partially_paid';
+      }
 
       await rent.save();
+      
       updates.push({ 
         rentId: rent._id, 
         month: rent.month, 

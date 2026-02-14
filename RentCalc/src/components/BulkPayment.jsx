@@ -1,54 +1,87 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { formatCurrency } from '../utils/helpers';
 import '../styles/BulkPayment.css';
-const BulkPayment = ({ unpaidBills, onApplyPayment, onCancel }) => {
+
+const BS_MONTHS = [
+  'Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
+  'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'
+];
+
+const round2 = (v) => Number(Number(v || 0).toFixed(2));
+
+const BulkPayment = ({ unpaidBills = [], onApplyPayment, onCancel }) => {
   const [amount, setAmount] = useState('');
-  const [results, setResults] = useState([]);
+  const [distribution, setDistribution] = useState([]);
   const [surplus, setSurplus] = useState(0);
   const [surplusAction, setSurplusAction] = useState('deduct');
 
+  // Sort bills oldest → newest (must match backend)
+  const sortedUnpaidBills = useMemo(
+    () =>
+      [...unpaidBills]
+        .filter((b) => b && Number(b.remainingAmount) > 0)
+        .sort((a, b) => {
+          if (a.year !== b.year) return a.year - b.year;
+          return BS_MONTHS.indexOf(a.month) - BS_MONTHS.indexOf(b.month);
+        }),
+    [unpaidBills]
+  );
+
   useEffect(() => {
-    if (!amount || parseFloat(amount) <= 0) {
-      setResults([]);
+    const numericAmount = parseFloat(amount);
+
+    if (!numericAmount || numericAmount <= 0 || sortedUnpaidBills.length === 0) {
+      setDistribution([]);
       setSurplus(0);
       return;
     }
 
-    let remaining = parseFloat(amount);
-    const distribution = [];
+    let remaining = round2(numericAmount);
+    const rows = [];
 
-    for (const bill of unpaidBills) {
+    for (const bill of sortedUnpaidBills) {
       if (remaining <= 0) break;
 
-      const dueAmount = bill.remainingAmount;
-      const applied = Math.min(remaining, dueAmount);
+      const due = round2(bill.remainingAmount);
+      if (due <= 0) continue;
 
-      distribution.push({
+      const applied = round2(Math.min(remaining, due));
+      const newDue = round2(due - applied);
+      const newStatus = newDue === 0 ? 'paid' : 'partially_paid';
+
+      rows.push({
         id: bill._id,
         month: bill.month,
         year: bill.year,
-        previousDue: dueAmount,
+        previousDue: due,
         applied,
-        newDue: dueAmount - applied,
-        newStatus: (dueAmount - applied) <= 0 ? 'paid' : 'partially_paid'
+        newDue,
+        newStatus
       });
 
-      remaining -= applied;
+      remaining = round2(remaining - applied);
     }
 
-    setResults(distribution);
+    setDistribution(rows);
     setSurplus(remaining > 0 ? remaining : 0);
-  }, [amount, unpaidBills]);
+  }, [amount, sortedUnpaidBills]);
 
   const handleApply = () => {
-    if (!amount || results.length === 0) return;
-    onApplyPayment({ amount: parseFloat(amount), distribution: results, surplus, surplusAction });
+    const numericAmount = parseFloat(amount);
+    if (!numericAmount || distribution.length === 0) return;
+
+    onApplyPayment({
+      amount: round2(numericAmount),
+      distribution,     // only for UI/debug – backend recalculates
+      surplus: round2(surplus),
+      surplusAction
+    });
   };
 
   return (
     <div className="bulk-payment">
       <h3>Apply Bulk Payment</h3>
-      
+
       <div className="form-row">
         <label>Payment Amount (Rs.)</label>
         <input
@@ -61,7 +94,7 @@ const BulkPayment = ({ unpaidBills, onApplyPayment, onCancel }) => {
         />
       </div>
 
-      {results.length > 0 && (
+      {distribution.length > 0 && (
         <div className="distribution-preview">
           <h4>Payment Distribution:</h4>
           <table className="distribution-table">
@@ -75,8 +108,8 @@ const BulkPayment = ({ unpaidBills, onApplyPayment, onCancel }) => {
               </tr>
             </thead>
             <tbody>
-              {results.map((row, i) => (
-                <tr key={i}>
+              {distribution.map((row, i) => (
+                <tr key={row.id || i}>
                   <td>{row.month}/{row.year}</td>
                   <td>{formatCurrency(row.previousDue)}</td>
                   <td className="applied">{formatCurrency(row.applied)}</td>
@@ -99,7 +132,7 @@ const BulkPayment = ({ unpaidBills, onApplyPayment, onCancel }) => {
               <div className="form-row">
                 <label>What to do with surplus?</label>
                 <div className="radio-group">
-                  <label className="radio-label">
+                  {/* <label className="radio-label">
                     <input
                       type="radio"
                       value="deduct"
@@ -107,7 +140,7 @@ const BulkPayment = ({ unpaidBills, onApplyPayment, onCancel }) => {
                       onChange={() => setSurplusAction('deduct')}
                     />
                     Deduct from next month
-                  </label>
+                  </label> */}
                   <label className="radio-label">
                     <input
                       type="radio"
@@ -125,7 +158,11 @@ const BulkPayment = ({ unpaidBills, onApplyPayment, onCancel }) => {
       )}
 
       <div className="bulk-payment-actions">
-        <button className="btn-primary" onClick={handleApply} disabled={!amount || results.length === 0}>
+        <button
+          className="btn-primary"
+          onClick={handleApply}
+          disabled={!amount || distribution.length === 0}
+        >
           Apply Payment
         </button>
         <button className="btn-secondary" onClick={onCancel}>

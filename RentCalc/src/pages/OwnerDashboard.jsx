@@ -11,10 +11,11 @@ import BulkPayment from '../components/BulkPayment';
 import QRUpload from '../components/QRUpload';
 import Loading from '../components/Loading';
 import ChatWidget from '../components/ChatWidget'; 
-import { usersAPI, rentsAPI, yearsAPI } from '../services/api'; // Added yearsAPI
+import ResetPasswordModal from '../components/ResetPasswordModal'; // Import New Modal
+import { usersAPI, rentsAPI, yearsAPI } from '../services/api';
 import { sortRentsByDate, formatCurrency } from '../utils/helpers';
 import { DEFAULT_YEARS } from '../utils/constants';
-import { FiTrash2, FiPlus } from 'react-icons/fi';
+import { FiTrash2, FiPlus, FiLock } from 'react-icons/fi';
 import '../styles/Dashboard.css';
 
 const OwnerDashboard = () => {
@@ -30,16 +31,17 @@ const OwnerDashboard = () => {
   const [qrUrl, setQrUrl] = useState(null);
   const [qrLoading, setQrLoading] = useState(true);
   
-  // Year Management State
+  // Year Management
   const [customYears, setCustomYears] = useState([]);
   const [showAddYear, setShowAddYear] = useState(false);
   const [newYear, setNewYear] = useState('');
   const [isYearSubmitting, setIsYearSubmitting] = useState(false);
 
-  // Combine Default + Custom Years, unique and sorted
+  // Reset Password State
+  const [showResetModal, setShowResetModal] = useState(false);
+
   const allAvailableYears = Array.from(new Set([...DEFAULT_YEARS, ...customYears.map(y => y.year)])).sort((a, b) => a - b);
 
-  // --- SOCKET LISTENER ---
   useEffect(() => {
     if (!socket) return;
     socket.on('new-notification', (newNotif) => {
@@ -47,9 +49,7 @@ const OwnerDashboard = () => {
     });
     return () => socket.off('new-notification');
   }, [socket]);
-  // -----------------------
 
-  // --- INITIAL DATA FETCH ---
   const fetchCustomYears = useCallback(async () => {
     try {
       const response = await yearsAPI.getYears();
@@ -111,7 +111,6 @@ const OwnerDashboard = () => {
     }
   };
 
-  // --- YEAR MANAGEMENT HANDLERS ---
   const handleAddYear = async () => {
     const year = parseInt(newYear);
     if (!year || year < 2070 || year > 2200) {
@@ -128,7 +127,7 @@ const OwnerDashboard = () => {
       await yearsAPI.addYear(year);
       await fetchCustomYears(); 
       setNewYear('');
-      setShowAddYear(false); // Close input after adding
+      setShowAddYear(false);
       toast.success(`Year ${year} added`);
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to add year');
@@ -148,7 +147,6 @@ const OwnerDashboard = () => {
     }
   };
 
-  // --- RENT & USER HANDLERS ---
   const handleUserSelect = (userId) => {
     setSelectedUserId(userId);
     setEditingEntry(null);
@@ -210,7 +208,7 @@ const OwnerDashboard = () => {
   };
 
   const handleDeleteRent = async (rentId) => {
-    if (!window.confirm('Delete?')) return;
+    // Note: Confirmation is now handled inside RentHistory.jsx
     try {
       await rentsAPI.deleteRent(rentId);
       toast.success('Deleted');
@@ -262,16 +260,12 @@ const OwnerDashboard = () => {
           {qrLoading ? <Loading text="Loading QR..." /> : <QRUpload currentQR={qrUrl} onUploadSuccess={handleQRUpload} />}
         </div>
 
-        {/* --- YEAR MANAGEMENT SECTION --- */}
+        {/* YEAR MANAGEMENT */}
         <div className="dashboard-section">
           <h2>Year Management</h2>
-          
           <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
             {!showAddYear ? (
-              <button 
-                className="btn-primary btn-small" 
-                onClick={() => setShowAddYear(true)}
-              >
+              <button className="btn-primary btn-small" onClick={() => setShowAddYear(true)}>
                 <FiPlus /> Add New Year
               </button>
             ) : (
@@ -283,17 +277,10 @@ const OwnerDashboard = () => {
                   placeholder="Enter year (e.g., 2095)" 
                   style={{ padding: '8px', borderRadius: '6px', border: '2px solid #e1e8ed', width: '140px' }}
                 />
-                <button 
-                  className="btn-primary btn-small" 
-                  onClick={handleAddYear} 
-                  disabled={isYearSubmitting}
-                >
+                <button className="btn-primary btn-small" onClick={handleAddYear} disabled={isYearSubmitting}>
                   {isYearSubmitting ? 'Saving...' : 'Add'}
                 </button>
-                <button 
-                  className="btn-secondary btn-small" 
-                  onClick={() => { setShowAddYear(false); setNewYear(''); }}
-                >
+                <button className="btn-secondary btn-small" onClick={() => { setShowAddYear(false); setNewYear(''); }}>
                   Cancel
                 </button>
               </div>
@@ -301,42 +288,36 @@ const OwnerDashboard = () => {
           </div>
           
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {/* Default Years (Read-only) */}
             {DEFAULT_YEARS.map(y => (
-              <span key={y} style={{ padding: '6px 12px', background: '#e1e8ed', borderRadius: '20px', fontSize: '13px', color: '#666' }}>
-                {y}
-              </span>
+              <span key={y} style={{ padding: '6px 12px', background: '#e1e8ed', borderRadius: '20px', fontSize: '13px', color: '#666' }}>{y}</span>
             ))}
-            
-            {/* Custom Years (Deletable) */}
             {customYears.map(y => (
-              <span key={y._id} style={{ 
-                padding: '6px 12px', 
-                background: '#d4edda', 
-                border: '1px solid #c3e6cb', 
-                borderRadius: '20px', 
-                fontSize: '13px', 
-                color: '#155724', 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '6px' 
-              }}>
+              <span key={y._id} style={{ padding: '6px 12px', background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '20px', fontSize: '13px', color: '#155724', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {y.year}
-                <FiTrash2 
-                  size={12} 
-                  style={{ cursor: 'pointer', color: '#dc3545' }} 
-                  onClick={() => handleDeleteYear(y._id)} 
-                  title="Remove year"
-                />
+                <FiTrash2 size={12} style={{ cursor: 'pointer', color: '#dc3545' }} onClick={() => handleDeleteYear(y._id)} title="Remove year" />
               </span>
             ))}
           </div>
         </div>
-        {/* ------------------------------- */}
 
+        {/* MANAGE TENANT SECTION */}
         <div className="dashboard-section">
-          <h2>Select Tenant</h2>
-          <UserSelect users={users} selectedUserId={selectedUserId} onSelect={handleUserSelect} onDelete={handleDeleteUser} />
+          <h2>Manage Tenant</h2>
+          <div className="tenant-management-controls">
+            <div style={{ flex: 1, minWidth: '250px' }}>
+              <UserSelect users={users} selectedUserId={selectedUserId} onSelect={handleUserSelect} onDelete={handleDeleteUser} />
+            </div>
+            
+            {/* RESET PASSWORD BUTTON */}
+            {selectedUserId && (
+              <button 
+                className="btn-reset-password"
+                onClick={() => setShowResetModal(true)}
+              >
+                <FiLock /> Reset Password
+              </button>
+            )}
+          </div>
         </div>
 
         {selectedUserId && (
@@ -361,14 +342,7 @@ const OwnerDashboard = () => {
             )}
             
             <div className="dashboard-section">
-              <RentForm 
-                onSubmit={handleSubmitRent} 
-                initialData={editingEntry} 
-                history={history} 
-                isEditing={!!editingEntry} 
-                onCancel={() => setEditingEntry(null)} 
-                availableYears={allAvailableYears} // Pass all years to form
-              />
+              <RentForm onSubmit={handleSubmitRent} initialData={editingEntry} history={history} isEditing={!!editingEntry} onCancel={() => setEditingEntry(null)} availableYears={allAvailableYears} />
             </div>
             
             <div className="dashboard-section">
@@ -385,8 +359,16 @@ const OwnerDashboard = () => {
         )}
       </div>
       
+      {/* MODALS */}
+      {showResetModal && selectedUser && (
+        <ResetPasswordModal 
+          tenantId={selectedUserId}
+          tenantName={selectedUser.name}
+          onClose={() => setShowResetModal(false)}
+        />
+      )}
 
-      <ChatWidget 
+     <ChatWidget 
         receiverId={selectedUserId} 
         receiverName={selectedUser?.name} 
       />

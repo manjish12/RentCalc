@@ -7,8 +7,8 @@ import RentHistory from '../components/RentHistory';
 import Loading from '../components/Loading';
 import ChatWidget from '../components/ChatWidget';
 import { rentsAPI, usersAPI, messagesAPI } from '../services/api';
-import { sortRentsByDate, formatCurrency } from '../utils/helpers';
-import { FiX, FiCheck } from 'react-icons/fi';
+import { sortRentsByDate, formatCurrency, generateCombinedPDF } from '../utils/helpers';
+import { FiX, FiCheck, FiDownload } from 'react-icons/fi';
 import '../styles/Dashboard.css';
 import '../styles/Modal.css';
 
@@ -94,6 +94,15 @@ const TenantDashboard = () => {
     }
   };
 
+  const handleDownloadReport = () => {
+    if (history.length === 0) {
+      toast.error('No history to download');
+      return;
+    }
+    generateCombinedPDF(history, user.name);
+    toast.success('Downloading full report...');
+  };
+
   const totalDue = history.filter(h => h.paymentStatus !== 'paid').reduce((sum, h) => sum + (h.remainingAmount || 0), 0);
   const totalPaid = history.reduce((sum, h) => sum + (h.paidAmount || 0), 0);
   const unpaidEntries = history.filter(h => h.paymentStatus !== 'paid');
@@ -104,7 +113,27 @@ const TenantDashboard = () => {
 
       <div className="dashboard-content">
         
-        {/* Removed the top button because RentHistory now handles bulk downloads */}
+        {/* PASSWORD CHANGE ALERT BANNER */}
+        {user?.mustChangePassword && (
+          <div style={{ 
+            background: '#e74c3c', 
+            color: 'white', 
+            padding: '15px', 
+            borderRadius: '8px', 
+            marginBottom: '20px', 
+            textAlign: 'center',
+            fontWeight: 'bold',
+            boxShadow: '0 4px 10px rgba(231, 76, 60, 0.2)'
+          }}>
+            ⚠️ SECURITY ALERT: Your password was reset by the owner. Please click the Lock icon in the top right to change it now.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          <button className="btn-primary" onClick={handleDownloadReport} disabled={history.length === 0}>
+            <FiDownload /> Download Full Statement
+          </button>
+        </div>
 
         <div className="summary-cards">
           <div className="summary-card">
@@ -125,7 +154,7 @@ const TenantDashboard = () => {
                 {unpaidEntries.map(entry => (
                   <div key={entry._id} className="pending-item">
                     <span><strong>{entry.month} {entry.year}</strong>: {formatCurrency(entry.remainingAmount)}</span>
-                    <button type="button" className="btn-primary btn-small" onClick={() => handlePayRent(entry)}>Pay Now</button>
+                    <button type="button" className="btn-primary btn-small" onClick={() => handlePayRent(entry)}> Pay Now</button>
                   </div>
                 ))}
               </div>
@@ -135,17 +164,14 @@ const TenantDashboard = () => {
 
         <div className="dashboard-section">
           {loading ? (
-            <Loading text="Loading..." />
+            <Loading text="Loading your rent history..." />
           ) : (
             <RentHistory 
               history={history} 
               userName={user?.name || 'User'} 
-              
-              /* --- THIS ENABLES BULK DOWNLOAD --- */
               showActions={true} 
-              onEdit={null} /* Disable Edit */
-              onDelete={null} /* Disable Delete */
-              /* --------------------------------- */
+              onEdit={null} 
+              onDelete={null} 
             />
           )}
         </div>

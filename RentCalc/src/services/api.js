@@ -34,7 +34,8 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
-  getProfile: () => api.get('/auth/profile')
+  getProfile: () => api.get('/auth/profile'),
+  changePassword: (data) => api.put('/auth/change-password', data)
 };
 
 export const usersAPI = {
@@ -42,7 +43,8 @@ export const usersAPI = {
   getUser: (id) => api.get(`/users/${id}`),
   deleteUser: (id) => api.delete(`/users/${id}`),
   getQR: (id) => api.get(`/users/${id}/qr`),
-  uploadQR: (imageBase64) => api.post('/users/qr', { imageBase64 })
+  uploadQR: (imageBase64) => api.post('/users/qr', { imageBase64 }),
+  resetTenantPassword: (tenantId, newPassword) => api.put('/users/reset-password', { tenantId, newPassword })
 };
 
 export const rentsAPI = {
@@ -61,13 +63,13 @@ export const notificationsAPI = {
   deleteNotification: (id) => api.delete(`/notifications/${id}`)
 };
 
-// --- UPDATED MESSAGES API ---
 export const messagesAPI = {
   getMessages: (otherUserId) => api.get(`/messages/${otherUserId}`),
   sendMessage: (receiverId, text) => api.post('/messages', { receiverId, text }),
   markMessagesRead: (otherUserId) => api.put('/messages/read', { otherUserId }),
-  getUnreadCount: () => api.get('/messages/unread-count') // New
+  getUnreadCount: () => api.get('/messages/unread-count')
 };
+
 export const yearsAPI = {
   getYears: () => api.get('/years'),
   addYear: (year) => api.post('/years', { year }),
