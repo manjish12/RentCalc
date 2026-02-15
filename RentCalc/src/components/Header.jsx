@@ -43,37 +43,33 @@ const Header = () => {
             <span>{user?.name}</span>
           </div>
 
-          <div className="header-menu-row">
-            <button
-              type="button"
-              className="header-logout-btn header-change-password-btn"
-              onClick={() => {
-                setShowPasswordModal(true);
-                setMenuOpen(false);
-              }}
-              title="Change Password"
-            >
-              <FiLock className="header-icon" />
-            </button>
-            {/* Text label visible only in mobile view */}
+          {/* FULL-ROW BUTTON: icon + text click together */}
+          <button
+            type="button"
+            className="header-menu-action header-menu-action--light"
+            onClick={() => {
+              setShowPasswordModal(true);
+              setMenuOpen(false);
+            }}
+            title="Change Password"
+          >
+            <FiLock className="header-menu-icon" />
             <span className="header-menu-label">Change Password</span>
-          </div>
+          </button>
 
-          <div className="header-menu-row">
-            <button
-              type="button"
-              className="header-logout-btn"
-              onClick={(e) => {
-                handleLogout(e);
-                setMenuOpen(false);
-              }}
-              title="Logout"
-            >
-              <FiLogOut className="header-icon" />
-            </button>
-            {/* Text label visible only in mobile view */}
+          {/* FULL-ROW BUTTON: icon + text click together */}
+          <button
+            type="button"
+            className="header-menu-action header-menu-action--danger"
+            onClick={(e) => {
+              handleLogout(e);
+              setMenuOpen(false);
+            }}
+            title="Logout"
+          >
+            <FiLogOut className="header-menu-icon" />
             <span className="header-menu-label">Logout</span>
-          </div>
+          </button>
         </div>
       </header>
 

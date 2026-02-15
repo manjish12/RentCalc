@@ -57,55 +57,56 @@
   font-size: 20px;
 }
 
-/* Buttons (logout + change password) */
+/* =========================
+   ACTION BUTTONS (DESKTOP)
+   ========================= */
 
-.header-logout-btn {
-  display: flex;
+/* Base style for both change-password & logout (on desktop) */
+.header-menu-action {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: 10px 20px;
-  background: linear-gradient(45deg, #ff6b6b, #ee5a52);
-  color: white;
-  border: none;
   border-radius: 8px;
+  cursor: pointer;
+  border: none;
   font-weight: 600;
   font-size: 14px;
-  cursor: pointer;
   transition: all 0.3s ease;
 }
 
-.header-logout-btn:hover {
+/* Only the icon is visible on desktop, label hidden (see media query) */
+.header-menu-icon {
+  font-size: 20px;
+}
+
+/* Text label: desktop hidden, mobile shown */
+.header-menu-label {
+  display: none;
+  font-size: 14px;
+}
+
+/* Light variant (Change Password) */
+.header-menu-action--light {
+  background: #f8f9fa;
+  color: #555;
+  border: 1px solid #e1e8ed;
+}
+
+/* Danger / gradient variant (Logout) */
+.header-menu-action--danger {
+  background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+  color: white;
+}
+
+.header-menu-action--danger:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(238, 90, 82, 0.4);
 }
 
-/* Light style for change-password button on desktop */
-
-.header-change-password-btn {
-  background: #f8f9fa;
-  color: #555;
-  border: 1px solid #e1e8ed;
-  margin-right: 5px;
-}
-
-/* Row that groups icon + label (used in mobile dropdown) */
-
-.header-menu-row {
-  display: flex;
-  align-items: center;
-  gap: 8px; /* desktop gap */
-}
-
-/* Text labels shown only on mobile (hidden by default) */
-
-.header-menu-label {
-  display: none;
-  font-size: 14px;
-  color: #555;
-}
-
 /* =========================
-   HAMBURGER (MOBILE TRIGGER)
+   HAMBURGER
    ========================= */
 
 .header-menu-toggle {
@@ -166,7 +167,7 @@
     transform: translateY(-6px) rotate(-45deg);
   }
 
-  /* Dropdown panel with user + actions */
+  /* Dropdown container */
   .header-right {
     position: absolute;
     top: 100%;
@@ -177,49 +178,61 @@
     padding: 10px 12px;
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-    display: none; /* hidden until hamburger open */
-    min-width: 180px;
+    display: none; /* hidden until hamburger is open */
+    min-width: 190px;
   }
 
   .header-right.open {
     display: flex;
   }
 
-  .header-user span {
+   .header-user span {
     display: block;
-    font-size: 13px;
-    max-width: 140px;
+    font-size: 14px;      
+    font-weight: 700;     
+    max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  /* Tighter icon + label row in dropdown */
-  .header-menu-row {
-    gap: 6px;
+  /* FULL-ROW CLICKABLE ACTIONS */
+  .header-menu-action {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 6px 8px;
+    border-radius: 6px;
+    gap: 8px;
+    box-shadow: none;
   }
 
-  /* Smaller round icons so text is closer */
-  .header-logout-btn {
-    padding: 0;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
+  .header-menu-icon {
+    font-size: 18px;
   }
 
-  /* Remove the right margin from change-password in mobile */
-  .header-change-password-btn {
-    margin-right: 0;
-    border: 1px solid #e1e8ed;
-    background: #f8f9fa;
+  /* Slightly toned-down look inside dropdown */
+  .header-menu-action--light {
+    background: transparent;
+    border: none;
     color: #555;
   }
 
-  /* Show labels only in mobile dropdown */
+  .header-menu-action--danger {
+    background: transparent;
+    color: #e74c3c;
+  }
+
+  .header-menu-action:hover {
+    background: #f5f7fa;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Show text label next to icon ONLY on mobile */
   .header-menu-label {
-    display: block;
+    display: inline-block;
     font-size: 13px;
     margin: 0;
   }
