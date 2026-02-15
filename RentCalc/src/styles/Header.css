@@ -1,3 +1,7 @@
+/* =========================
+   HEADER BASE
+   ========================= */
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -53,47 +57,12 @@
   font-size: 20px;
 }
 
-.header-notification-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  background: #f8f9fa;
-  border: 2px solid #e1e8ed;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.header-notification-btn:hover {
-  background: #e9ecef;
-  transform: scale(1.05);
-  border-color: #667eea;
-}
-
-.notification-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: #e74c3c;
-  color: white;
-  font-size: 11px;
-  font-weight: 700;
-  min-width: 20px;
-  height: 20px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 6px;
-}
+/* Buttons (logout + change password) */
 
 .header-logout-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   padding: 10px 20px;
   background: linear-gradient(45deg, #ff6b6b, #ee5a52);
   color: white;
@@ -110,51 +79,148 @@
   box-shadow: 0 4px 15px rgba(238, 90, 82, 0.4);
 }
 
-/* --- RESPONSIVE STYLES --- */
+/* Light style for change-password button on desktop */
+
+.header-change-password-btn {
+  background: #f8f9fa;
+  color: #555;
+  border: 1px solid #e1e8ed;
+  margin-right: 5px;
+}
+
+/* Row that groups icon + label (used in mobile dropdown) */
+
+.header-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* desktop gap */
+}
+
+/* Text labels shown only on mobile (hidden by default) */
+
+.header-menu-label {
+  display: none;
+  font-size: 14px;
+  color: #555;
+}
+
+/* =========================
+   HAMBURGER (MOBILE TRIGGER)
+   ========================= */
+
+.header-menu-toggle {
+  display: none; /* hidden on desktop */
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  margin-left: auto;
+}
+
+.header-menu-toggle span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background-color: #333;
+  border-radius: 4px;
+  transition: all 0.25s ease;
+}
+
+.header-menu-toggle span + span {
+  margin-top: 4px;
+}
+
+/* =========================
+   RESPONSIVE (MOBILE ≤ 768px)
+   ========================= */
+
 @media (max-width: 768px) {
   .header {
     padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 200;
   }
 
-  /* Make title smaller to fit name */
   .header-title {
     font-size: 1.2rem;
   }
 
-  /* Adjust gaps */
-  .header-left, .header-right {
+  .header-left {
     gap: 8px;
   }
 
-  /* Hide the Role label on very small screens if needed, 
-     but keep User Name visible now */
-  
-  /* Ensure User Name is VISIBLE but slightly smaller */
+  /* Show hamburger on mobile */
+  .header-menu-toggle {
+    display: block;
+  }
+
+  /* Turn three lines into an "X" when menu is open */
+  .header-menu-toggle.open span:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+  }
+  .header-menu-toggle.open span:nth-child(2) {
+    opacity: 0;
+  }
+  .header-menu-toggle.open span:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+
+  /* Dropdown panel with user + actions */
+  .header-right {
+    position: absolute;
+    top: 100%;
+    right: 12px;
+    margin-top: 8px;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    display: none; /* hidden until hamburger open */
+    min-width: 180px;
+  }
+
+  .header-right.open {
+    display: flex;
+  }
+
   .header-user span {
-    display: block; /* Changed from none to block */
+    display: block;
     font-size: 13px;
-    max-width: 100px; /* Truncate if name is super long */
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  /* Hide the text "Logout" inside the button to save space */
-  .header-logout-btn span {
-    display: none;
+  /* Tighter icon + label row in dropdown */
+  .header-menu-row {
+    gap: 6px;
   }
 
-  /* Make logout button a circle icon */
+  /* Smaller round icons so text is closer */
   .header-logout-btn {
     padding: 0;
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    justify-content: center;
   }
-  
-  .header-notification-btn {
-    width: 36px;
-    height: 36px;
+
+  /* Remove the right margin from change-password in mobile */
+  .header-change-password-btn {
+    margin-right: 0;
+    border: 1px solid #e1e8ed;
+    background: #f8f9fa;
+    color: #555;
+  }
+
+  /* Show labels only in mobile dropdown */
+  .header-menu-label {
+    display: block;
+    font-size: 13px;
+    margin: 0;
   }
 }

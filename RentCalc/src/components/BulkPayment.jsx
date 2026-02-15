@@ -1,10 +1,21 @@
+// src/components/BulkPayment.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { formatCurrency } from '../utils/helpers';
 import '../styles/BulkPayment.css';
 
 const BS_MONTHS = [
-  'Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
-  'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'
+  'Baisakh',
+  'Jestha',
+  'Ashadh',
+  'Shrawan',
+  'Bhadra',
+  'Ashwin',
+  'Kartik',
+  'Mangsir',
+  'Poush',
+  'Magh',
+  'Falgun',
+  'Chaitra'
 ];
 
 const round2 = (v) => Number(Number(v || 0).toFixed(2));
@@ -15,7 +26,7 @@ const BulkPayment = ({ unpaidBills = [], onApplyPayment, onCancel }) => {
   const [surplus, setSurplus] = useState(0);
   const [surplusAction, setSurplusAction] = useState('deduct');
 
-  // Sort bills oldest → newest (must match backend)
+  // Sort bills from oldest → newest (year ASC, month ASC)
   const sortedUnpaidBills = useMemo(
     () =>
       [...unpaidBills]
@@ -27,6 +38,7 @@ const BulkPayment = ({ unpaidBills = [], onApplyPayment, onCancel }) => {
     [unpaidBills]
   );
 
+  // Recalculate distribution whenever amount or unpaid bills change
   useEffect(() => {
     const numericAmount = parseFloat(amount);
 
@@ -72,9 +84,9 @@ const BulkPayment = ({ unpaidBills = [], onApplyPayment, onCancel }) => {
 
     onApplyPayment({
       amount: round2(numericAmount),
-      distribution,     // only for UI/debug – backend recalculates
+      surplusAction,
       surplus: round2(surplus),
-      surplusAction
+      distribution
     });
   };
 
@@ -97,32 +109,36 @@ const BulkPayment = ({ unpaidBills = [], onApplyPayment, onCancel }) => {
       {distribution.length > 0 && (
         <div className="distribution-preview">
           <h4>Payment Distribution:</h4>
-          <table className="distribution-table">
-            <thead>
-              <tr>
-                <th>Month/Year</th>
-                <th>Previous Due</th>
-                <th>Applied</th>
-                <th>New Due</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {distribution.map((row, i) => (
-                <tr key={row.id || i}>
-                  <td>{row.month}/{row.year}</td>
-                  <td>{formatCurrency(row.previousDue)}</td>
-                  <td className="applied">{formatCurrency(row.applied)}</td>
-                  <td>{formatCurrency(row.newDue)}</td>
-                  <td>
-                    <span className={`status-badge status-${row.newStatus}`}>
-                      {row.newStatus}
-                    </span>
-                  </td>
+
+          {/* Horizontal scroll wrapper for small screens */}
+          <div className="distribution-table-wrapper">
+            <table className="distribution-table">
+              <thead>
+                <tr>
+                  <th>Month/Year</th>
+                  <th>Previous Due</th>
+                  <th>Applied</th>
+                  <th>New Due</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {distribution.map((row, i) => (
+                  <tr key={row.id || i}>
+                    <td>{row.month}/{row.year}</td>
+                    <td>{formatCurrency(row.previousDue)}</td>
+                    <td className="applied">{formatCurrency(row.applied)}</td>
+                    <td>{formatCurrency(row.newDue)}</td>
+                    <td>
+                      <span className={`status-badge status-${row.newStatus}`}>
+                        {row.newStatus}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {surplus > 0 && (
             <div className="surplus-section">

@@ -7,11 +7,14 @@ import '../styles/Header.css';
 const Header = () => {
   const { user, logout } = useAuth();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = (e) => {
     e.preventDefault();
     logout();
   };
+
+  const toggleMenu = () => setMenuOpen((prev) => !prev);
 
   return (
     <>
@@ -20,20 +23,63 @@ const Header = () => {
           <h1 className="header-title">RentCalc</h1>
           <span className="header-role">{user?.role}</span>
         </div>
-        <div className="header-right">
+
+        {/* Hamburger for small screens */}
+        <button
+          type="button"
+          className={`header-menu-toggle ${menuOpen ? 'open' : ''}`}
+          onClick={toggleMenu}
+          aria-label="Toggle menu"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        {/* Right side: user + actions */}
+        <div className={`header-right ${menuOpen ? 'open' : ''}`}>
           <div className="header-user">
             <FiUser className="header-icon" />
             <span>{user?.name}</span>
           </div>
-          <button type="button" className="header-logout-btn" onClick={() => setShowPasswordModal(true)} title="Change Password" style={{ background: '#f8f9fa', color: '#555', border: '1px solid #e1e8ed', marginRight: '5px' }}>
-            <FiLock className="header-icon" />
-          </button>
-          <button type="button" className="header-logout-btn" onClick={handleLogout} title="Logout">
-            <FiLogOut className="header-icon" />
-          </button>
+
+          <div className="header-menu-row">
+            <button
+              type="button"
+              className="header-logout-btn header-change-password-btn"
+              onClick={() => {
+                setShowPasswordModal(true);
+                setMenuOpen(false);
+              }}
+              title="Change Password"
+            >
+              <FiLock className="header-icon" />
+            </button>
+            {/* Text label visible only in mobile view */}
+            <span className="header-menu-label">Change Password</span>
+          </div>
+
+          <div className="header-menu-row">
+            <button
+              type="button"
+              className="header-logout-btn"
+              onClick={(e) => {
+                handleLogout(e);
+                setMenuOpen(false);
+              }}
+              title="Logout"
+            >
+              <FiLogOut className="header-icon" />
+            </button>
+            {/* Text label visible only in mobile view */}
+            <span className="header-menu-label">Logout</span>
+          </div>
         </div>
       </header>
-      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
+
+      {showPasswordModal && (
+        <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
+      )}
     </>
   );
 };
