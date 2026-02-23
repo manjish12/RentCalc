@@ -1,117 +1,172 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiMessageSquare, FiX, FiSend, FiUser, FiCheck } from 'react-icons/fi';
+import { FiMessageSquare, FiX, FiSend, FiUser, FiCheck, FiChevronLeft } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { messagesAPI } from '../services/api';
 import '../styles/ChatWidget.css';
 
-// NEW SOUND: A soft, pleasant "pop"
 const NOTIFICATION_SOUND = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3';
 
-const ChatWidget = ({ receiverId, receiverName }) => {
+const ChatWidget = ({ 
+  defaultReceiverId = null, 
+  defaultReceiverName = null,
+  usersList = [] 
+}) => {
   const { user } = useAuth();
   const { socket } = useSocket();
+  const isOwner = user?.role === 'owner';
+  
+  // FIX: Only force list view if we are Owner AND we haven't been given a default chat
+  // If we are Tenant, we ALWAYS want chat view.
+  const [currentView, setCurrentView] = useState(isOwner && !defaultReceiverId ? 'list' : 'chat');
   
   const [isOpen, setIsOpen] = useState(false);
+  const [activeReceiverId, setActiveReceiverId] = useState(defaultReceiverId);
+  const [activeReceiverName, setActiveReceiverName] = useState(defaultReceiverName);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  
-  // Badge State
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [totalUnread, setTotalUnread] = useState(0);
+  const [unreadMap, setUnreadMap] = useState({});
   
   const messagesEndRef = useRef(null);
+
+  // --- DYNAMIC TITLE LOGIC ---
+  const flashTitle = (text) => {
+    if (document.hidden || !isOpen) {
+      document.title = text;
+    }
+  };
+
+  useEffect(() => {
+    const resetTitle = () => { document.title = 'RentCalc'; };
+    window.addEventListener('focus', resetTitle);
+    document.addEventListener('click', resetTitle);
+    return () => {
+      window.removeEventListener('focus', resetTitle);
+      document.removeEventListener('click', resetTitle);
+    };
+  }, []);
+
+  const playSound = () => {
+    try {
+      const audio = new Audio(NOTIFICATION_SOUND);
+      audio.volume = 0.4;
+      audio.play().catch(e => {});
+    } catch (e) { console.error("Audio error", e); }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Improved Sound Function
-  const playSound = () => {
+  // --- INITIAL LOAD ---
+  useEffect(() => {
+    if (user) {
+      fetchUnreadCounts();
+    }
+    
+    // CRITICAL FIX FOR TENANT:
+    // If we are passed a default receiver (like Owner), set it active immediately
+    if (defaultReceiverId) {
+      setActiveReceiverId(defaultReceiverId);
+      setActiveReceiverName(defaultReceiverName || "Chat");
+      setCurrentView('chat');
+    }
+  }, [user, defaultReceiverId, defaultReceiverName]);
+
+  const fetchUnreadCounts = async () => {
     try {
-      const audio = new Audio(NOTIFICATION_SOUND);
-      audio.volume = 0.4; // Lower volume (40%) so it's subtle
-      
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          // Browser prevented auto-play (user hasn't clicked page yet)
-          console.log("Sound blocked by browser policy until interaction");
-        });
-      }
-    } catch (e) {
-      console.error("Audio error", e);
+      const res = await messagesAPI.getUnreadCount();
+      setTotalUnread(res.data.unreadCount);
+      setUnreadMap(res.data.breakdown || {});
+    } catch (error) {
+      console.error('Failed to get counts');
     }
   };
 
-  // 1. Initial Load: Get Unread Count
-  useEffect(() => {
-    if (user) {
-      const fetchCount = async () => {
-        try {
-          const res = await messagesAPI.getUnreadCount();
-          setUnreadCount(res.data.unreadCount);
-        } catch (error) {
-          console.error('Failed to get unread count');
-        }
-      };
-      fetchCount();
-    }
-  }, [user]);
+  const openChatWith = (id, name) => {
+    setActiveReceiverId(id);
+    setActiveReceiverName(name);
+    setCurrentView('chat');
+    
+    setUnreadMap(prev => {
+      const count = prev[id] || 0;
+      const newTotal = Math.max(0, totalUnread - count);
+      setTotalUnread(newTotal);
+      const newMap = { ...prev };
+      delete newMap[id];
+      return newMap;
+    });
+    document.title = 'RentCalc';
+  };
 
-  // 2. Fetch Messages when Chat Opens
+  const backToList = () => {
+    // Only allow going back if we are an Owner (who has a list)
+    if (isOwner) {
+      setActiveReceiverId(null);
+      setCurrentView('list');
+      fetchUnreadCounts(); 
+    }
+  };
+
+  // --- FETCH MESSAGES ---
   useEffect(() => {
-    if (isOpen && receiverId) {
-      const initChat = async () => {
+    if (isOpen && currentView === 'chat' && activeReceiverId) {
+      const loadMessages = async () => {
         try {
-          const response = await messagesAPI.getMessages(receiverId);
-          setMessages(response.data);
-          
-          // Mark as read and reset badge
-          await messagesAPI.markMessagesRead(receiverId);
-          setUnreadCount(0);
-          
+          const res = await messagesAPI.getMessages(activeReceiverId);
+          setMessages(res.data);
+          await messagesAPI.markMessagesRead(activeReceiverId);
           setTimeout(scrollToBottom, 100);
-        } catch (error) {
-          console.error('Failed to load chat');
-        }
+        } catch (error) { console.error(error); }
       };
-      initChat();
+      loadMessages();
     }
-  }, [isOpen, receiverId]);
+  }, [isOpen, currentView, activeReceiverId]);
 
-  // 3. Socket Listeners
+  // --- SOCKET LISTENERS ---
   useEffect(() => {
     if (!socket) return;
 
-    const handleReceiveMessage = async (message) => {
-      // Logic if message belongs to current conversation
-      if (message.senderId === receiverId || message.senderId === user._id) {
-        setMessages((prev) => [...prev, message]);
+    const handleReceiveMessage = (message) => {
+      let senderName = "New Message";
+      
+      // Try to find name in list (Owner case)
+      if (usersList && usersList.length > 0) {
+        const sender = usersList.find(u => u._id === message.senderId);
+        if (sender) senderName = sender.name;
+      } 
+      // Fallback for Tenant case (Sender is Owner)
+      else if (message.senderId === defaultReceiverId) {
+        senderName = defaultReceiverName || "Owner";
+      }
+
+      if (isOpen && currentView === 'chat' && 
+         (message.senderId === activeReceiverId || message.senderId === user._id)) {
+        
+        setMessages(prev => [...prev, message]);
         setTimeout(scrollToBottom, 100);
 
-        // If I am the receiver
-        if (message.receiverId === user._id) {
-          playSound(); 
-
-          if (isOpen) {
-            // If chat open, mark read immediately
-            await messagesAPI.markMessagesRead(receiverId);
-          } else {
-            // If chat closed, increase badge
-            setUnreadCount(prev => prev + 1);
-          }
+        if (message.senderId === activeReceiverId) {
+          playSound();
+          messagesAPI.markMessagesRead(activeReceiverId); 
+          flashTitle(`(${totalUnread + 1}) ${senderName} messaged you`);
         }
       } 
-      // Logic if message is from someone else
       else if (message.receiverId === user._id) {
         playSound();
-        setUnreadCount(prev => prev + 1);
+        setTotalUnread(prev => prev + 1);
+        setUnreadMap(prev => ({
+          ...prev,
+          [message.senderId]: (prev[message.senderId] || 0) + 1
+        }));
+        flashTitle(`(1) ${senderName} messaged you`);
       }
     };
 
     const handleMessagesRead = ({ byUserId }) => {
-      if (byUserId === receiverId) {
-        setMessages((prev) => 
+      if (byUserId === activeReceiverId) {
+        setMessages(prev => 
           prev.map(msg => msg.senderId === user._id ? { ...msg, isRead: true } : msg)
         );
       }
@@ -124,31 +179,26 @@ const ChatWidget = ({ receiverId, receiverName }) => {
       socket.off('receive-message', handleReceiveMessage);
       socket.off('messages-read', handleMessagesRead);
     };
-  }, [socket, receiverId, user, isOpen]);
+  }, [socket, isOpen, currentView, activeReceiverId, user, usersList, defaultReceiverId, defaultReceiverName]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !receiverId) return;
+    if (!newMessage.trim() || !activeReceiverId) return;
 
     try {
       const tempMsg = {
         _id: Date.now(),
         senderId: user._id,
-        receiverId: receiverId,
         text: newMessage,
         isRead: false,
         createdAt: new Date().toISOString()
       };
-      
-      setMessages((prev) => [...prev, tempMsg]);
+      setMessages(prev => [...prev, tempMsg]);
       setNewMessage('');
       setTimeout(scrollToBottom, 100);
 
-      // Send plain text
-      await messagesAPI.sendMessage(receiverId, newMessage);
-    } catch (error) {
-      console.error('Failed to send message');
-    }
+      await messagesAPI.sendMessage(activeReceiverId, newMessage);
+    } catch (error) { console.error('Send failed'); }
   };
 
   if (!user) return null;
@@ -157,22 +207,60 @@ const ChatWidget = ({ receiverId, receiverName }) => {
     <div className="chat-widget-container">
       {isOpen && (
         <div className="chat-box">
+          {/* HEADER */}
           <div className="chat-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <FiUser />
-              <span>{receiverName || 'Select a User'}</span>
+              {/* Only show Back button if Owner AND currently in chat view */}
+              {isOwner && currentView === 'chat' && (
+                <button onClick={backToList} className="back-btn">
+                  <FiChevronLeft />
+                </button>
+              )}
+              {/* Icon Logic: Show User Icon if Tenant OR if Owner in List View */}
+              {(!isOwner || currentView === 'list') && (
+                <FiUser style={{ color: 'white', fontSize: '20px' }} />
+              )}
+              
+              <span className="header-title">
+                {currentView === 'chat' ? activeReceiverName : 'Messages'}
+              </span>
             </div>
-            <button className="btn-icon" onClick={() => setIsOpen(false)} style={{ color: 'white', background: 'transparent', border: 'none' }}>
+            <button className="close-btn" onClick={() => setIsOpen(false)}>
               <FiX />
             </button>
           </div>
 
-          {!receiverId ? (
-            <div className="chat-empty">
-              <FiMessageSquare size={40} style={{ marginBottom: '10px' }} />
-              <p>Please select a tenant/owner to start chatting.</p>
+          {/* LIST VIEW (OWNER ONLY) */}
+          {isOwner && currentView === 'list' && (
+            <div className="chat-user-list">
+              {usersList.length === 0 ? (
+                <div className="empty-list">
+                  <p>No tenants found.</p>
+                  <small>Add tenants to see them here.</small>
+                </div>
+              ) : (
+                usersList.map(u => (
+                  <div 
+                    key={u._id} 
+                    className="user-list-item" 
+                    onClick={() => openChatWith(u._id, u.name)}
+                  >
+                    <div className="user-avatar">{u.name.charAt(0).toUpperCase()}</div>
+                    <div className="user-info">
+                      <span className="user-name">{u.name}</span>
+                      <span className="user-email">{u.email}</span>
+                    </div>
+                    {unreadMap[u._id] > 0 && (
+                      <span className="list-badge">{unreadMap[u._id]}</span>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
-          ) : (
+          )}
+
+          {/* CHAT VIEW */}
+          {currentView === 'chat' && (
             <>
               <div className="chat-messages">
                 {messages.length === 0 ? (
@@ -186,7 +274,10 @@ const ChatWidget = ({ receiverId, receiverName }) => {
                       {msg.senderId === user._id && (
                         <div className={`message-status ${msg.isRead ? 'read' : ''}`}>
                           {msg.isRead ? (
-                            <div className="double-check"><FiCheck size={12} /><FiCheck size={12} style={{ marginLeft: '-8px' }} /></div>
+                            <div className="double-check">
+                              <FiCheck size={12} />
+                              <FiCheck size={12} style={{ marginLeft: '-8px' }} />
+                            </div>
                           ) : (
                             <FiCheck size={12} />
                           )}
@@ -197,9 +288,13 @@ const ChatWidget = ({ receiverId, receiverName }) => {
                 )}
                 <div ref={messagesEndRef} />
               </div>
-
               <form className="chat-input-area" onSubmit={handleSendMessage}>
-                <input type="text" placeholder="Type a message..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} />
+                <input 
+                  type="text" 
+                  placeholder="Type a message..." 
+                  value={newMessage} 
+                  onChange={(e) => setNewMessage(e.target.value)} 
+                />
                 <button type="submit" className="send-btn"><FiSend /></button>
               </form>
             </>
@@ -209,8 +304,8 @@ const ChatWidget = ({ receiverId, receiverName }) => {
 
       <button className={`chat-fab ${isOpen ? 'open' : ''}`} onClick={() => setIsOpen(!isOpen)}>
         {isOpen ? <FiX /> : <FiMessageSquare />}
-        {!isOpen && unreadCount > 0 && (
-          <span className="chat-badge">{unreadCount}</span>
+        {!isOpen && totalUnread > 0 && (
+          <span className="chat-badge">{totalUnread}</span>
         )}
       </button>
     </div>

@@ -296,7 +296,7 @@ const RentForm = ({
             style={{ backgroundColor: history.length > 0 && !isEditing ? '#f0f0f0' : 'white' }}
           />
         </div>
-        <div className="form-row">
+          <div className="form-row">
           <label>Curr. Electricity *</label>
           <input
             type="number"
@@ -304,7 +304,8 @@ const RentForm = ({
             value={form.currElectricity}
             onChange={handleChange}
             required
-            min={form.prevElectricity || 0}   // 🔹 prevents typing lower than previous
+            min={form.prevElectricity || 0}   
+            step="any"  
           />
         </div>
         <div className="form-row">

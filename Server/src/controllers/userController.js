@@ -73,7 +73,7 @@ export const uploadQR = async (req, res) => {
   }
 };
 
-// RESET PASSWORD (OWNER ONLY)
+// --- RESET TENANT PASSWORD ---
 export const resetTenantPassword = async (req, res) => {
   try {
     const { tenantId, newPassword } = req.body;
@@ -82,6 +82,15 @@ export const resetTenantPassword = async (req, res) => {
 
     const tenant = await User.findOne({ _id: tenantId, linkedOwnerId: req.user._id });
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    // Store Owner Name in history
+    tenant.passwordHistory.push({
+      hash: tenant.password,
+      changedAt: new Date(),
+      changedBy: `${req.user.name} (Owner)`
+    });
+
+    if (tenant.passwordHistory.length > 6) tenant.passwordHistory.shift();
 
     tenant.password = newPassword;
     tenant.mustChangePassword = true; 

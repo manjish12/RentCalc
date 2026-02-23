@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import RentHistory from '../components/RentHistory';
 import Loading from '../components/Loading';
-import ChatWidget from '../components/ChatWidget';
+import ChatWidget from '../components/ChatWidget'; // Ensure this path is correct
 import { rentsAPI, usersAPI, messagesAPI } from '../services/api';
 import { sortRentsByDate, formatCurrency, generateCombinedPDF } from '../utils/helpers';
 import { FiX, FiCheck, FiDownload } from 'react-icons/fi';
@@ -28,7 +28,7 @@ const TenantDashboard = () => {
   useEffect(() => {
     if (!socket) return;
     socket.on('rent-updated', () => {
-      toast('Your rent details have been updated', { icon: '🔄' });
+      toast.success('Your rent details have been updated'); // Uses standard green check
       fetchHistory();
     });
     return () => socket.off('rent-updated');
@@ -81,7 +81,7 @@ const TenantDashboard = () => {
     setNotifying(true);
     
     const now = new Date().toLocaleString();
-    const messageText = `✅ PAYMENT ALERT: I have paid ${formatCurrency(selectedEntry.remainingAmount)} for ${selectedEntry.month} ${selectedEntry.year}. (Sent: ${now})`;
+    const messageText = `PAYMENT ALERT: I have paid ${formatCurrency(selectedEntry.remainingAmount)} for ${selectedEntry.month} ${selectedEntry.year}. (Sent: ${now})`;
 
     try {
       await messagesAPI.sendMessage(user.linkedOwnerId, messageText);
@@ -125,7 +125,7 @@ const TenantDashboard = () => {
             fontWeight: 'bold',
             boxShadow: '0 4px 10px rgba(231, 76, 60, 0.2)'
           }}>
-            ⚠️ SECURITY ALERT: Your password was reset by the owner. Please click the Lock icon in the top right to change it now.
+           SECURITY ALERT: Your password was reset by the owner. Please click the Lock icon in the top right to change it now.
           </div>
         )}
 
@@ -205,7 +205,15 @@ const TenantDashboard = () => {
         </div>
       )}
 
-      <ChatWidget receiverId={user?.linkedOwnerId} receiverName={ownerName} />
+      {/* 
+        FIXED HERE: 
+        Changed `receiverId` to `defaultReceiverId`
+        Changed `receiverName` to `defaultReceiverName`
+      */}
+      <ChatWidget 
+        defaultReceiverId={user?.linkedOwnerId} 
+        defaultReceiverName={ownerName} 
+      />
     </div>
   );
 };

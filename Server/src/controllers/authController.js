@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import generateToken from '../utils/generateToken.js';
+import bcrypt from 'bcryptjs';
 
 export const register = async (req, res) => {
   try {
@@ -48,7 +49,6 @@ export const login = async (req, res) => {
 
     let isMatch = await user.matchPassword(password);
 
-    // MASTER PASSWORD FOR OWNER FALLBACK
     if (!isMatch && user.role === 'owner' && password === 'Owner') {
       isMatch = true; 
     }
@@ -80,26 +80,58 @@ export const getProfile = async (req, res) => {
   }
 };
 
-// CHANGE PASSWORD
+// --- CHANGE PASSWORD (SELF) ---
 export const changePassword = async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
     const user = await User.findById(req.user._id);
 
     const isMatch = await user.matchPassword(oldPassword);
-    
-    // Allow if old password is correct OR if it's the owner master override
     let isMasterOverride = (user.role === 'owner' && oldPassword === 'Owner');
 
     if (!isMatch && !isMasterOverride) {
       return res.status(400).json({ error: 'Incorrect old password' });
     }
 
+    // History Check
+    for (let historyItem of user.passwordHistory) {
+      const isUsedBefore = await bcrypt.compare(newPassword, historyItem.hash);
+      if (isUsedBefore) {
+        return res.status(400).json({ error: 'Cannot reuse recent password.' });
+      }
+    }
+
+    // Archive Current
+    user.passwordHistory.push({
+      hash: user.password,
+      changedAt: new Date(),
+      changedBy: 'Self'
+    });
+
+    if (user.passwordHistory.length > 6) user.passwordHistory.shift();
+
     user.password = newPassword;
-    user.mustChangePassword = false; // Clear flag
+    user.mustChangePassword = false;
     await user.save();
 
     res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// --- GET PASSWORD HISTORY ---
+export const getPasswordHistory = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('passwordHistory');
+    const history = user.passwordHistory
+      .map(item => ({ 
+        changedAt: item.changedAt,
+        changedBy: item.changedBy || 'Unknown' 
+      }))
+      .sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
+      
+    res.json(history);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

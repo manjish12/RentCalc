@@ -369,9 +369,10 @@ const OwnerDashboard = () => {
       )}
 
      <ChatWidget 
-        receiverId={selectedUserId} 
-        receiverName={selectedUser?.name} 
-      />
+    usersList={users} 
+    defaultReceiverId={selectedUserId} // Optional: To auto-open chat if selected
+    defaultReceiverName={selectedUser?.name} 
+  />
     </div>
   );
 };

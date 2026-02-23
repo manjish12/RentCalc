@@ -10,7 +10,14 @@ const userSchema = new mongoose.Schema({
   ownerCode: { type: String, unique: true, sparse: true },
   linkedOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   qrImageUrl: { type: String, default: null },
-  mustChangePassword: { type: Boolean, default: false } // New Flag
+  mustChangePassword: { type: Boolean, default: false },
+  
+  // --- PASSWORD HISTORY SCHEMA ---
+  passwordHistory: [{
+    hash: String,
+    changedAt: { type: Date, default: Date.now },
+    changedBy: String // "Self" or "Owner Name (Owner)"
+  }]
 }, {
   timestamps: true
 });

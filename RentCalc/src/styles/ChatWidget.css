@@ -8,7 +8,7 @@
   align-items: flex-end;
 }
 
-/* Floating Button */
+/* FAB */
 .chat-fab {
   width: 60px;
   height: 60px;
@@ -23,21 +23,27 @@
   justify-content: center;
   font-size: 24px;
   transition: transform 0.3s ease;
+  position: relative;
 }
 
-.chat-fab:hover {
-  transform: scale(1.1);
-}
+.chat-fab:hover { transform: scale(1.1); }
+.chat-fab.open { transform: rotate(45deg); background: #e74c3c; }
 
-.chat-fab.open {
-  transform: rotate(45deg);
-  background: #e74c3c;
+.chat-badge {
+  position: absolute;
+  top: -5px; right: -5px;
+  background: #ff4757; color: white;
+  font-size: 12px; font-weight: bold;
+  height: 24px; width: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid white;
 }
 
 /* Chat Box */
 .chat-box {
   width: 350px;
-  height: 450px;
+  height: 480px;
   background: white;
   border-radius: 12px;
   box-shadow: 0 5px 25px rgba(0,0,0,0.15);
@@ -46,18 +52,92 @@
   overflow: hidden;
   margin-bottom: 16px;
   animation: slideIn 0.3s ease-out;
+  border: 1px solid #e1e8ed;
 }
 
+/* --- HEADER STYLES (Fixed) --- */
 .chat-header {
   background: #667eea;
-  color: white;
-  padding: 16px;
+  color: #ffffff !important; /* Force White */
+  padding: 12px 16px;
   font-weight: 600;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  height: 60px;
+  flex-shrink: 0;
 }
 
+.header-title {
+  color: #ffffff !important; /* Force White */
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.back-btn, .close-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff !important; /* Force White */
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  opacity: 0.9;
+}
+.back-btn:hover, .close-btn:hover { opacity: 1; }
+
+/* USER LIST */
+.chat-user-list {
+  flex: 1;
+  overflow-y: auto;
+  background: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-list-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background 0.2s;
+  width: 100%;
+}
+
+.user-list-item:hover { background: #f1f3f5; }
+
+.user-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: #e1e8ed;
+  color: #667eea;
+  display: flex; align-items: center; justify-content: center;
+  margin-right: 12px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.user-info { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+.user-name { display: block; font-weight: 600; color: #333; font-size: 14px; }
+.user-email { display: block; font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; }
+
+.list-badge {
+  background: #ff4757; color: white;
+  font-size: 11px; font-weight: bold;
+  padding: 2px 8px; border-radius: 10px; margin-left: 8px;
+  flex-shrink: 0;
+}
+
+/* MESSAGES */
 .chat-messages {
   flex: 1;
   padding: 16px;
@@ -65,131 +145,101 @@
   background: #f8f9fa;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .message {
   max-width: 80%;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 12px;
   font-size: 14px;
-  position: relative;
   word-wrap: break-word;
+  line-height: 1.4;
+  position: relative;
 }
 
+/* --- FIXED BUBBLE COLORS --- */
 .message.sent {
   align-self: flex-end;
   background: #667eea;
-  color: white;
+  color: #ffffff !important; /* White Text */
   border-bottom-right-radius: 2px;
 }
 
 .message.received {
   align-self: flex-start;
-  background: white;
-  color: #333;
+  background: #ffffff;
+  color: #333333 !important; /* Dark Text */
   border: 1px solid #e1e8ed;
   border-bottom-left-radius: 2px;
 }
 
+/* --- TICKS --- */
+.message-status {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7); /* Light white for sent messages */
+}
+
+/* If message is received, ticks are hidden anyway, but just in case */
+.message.received .message-status { display: none; }
+
+.message-status.read { color: #69f0ae; } /* Green */
+
+.double-check { display: flex; }
+
+/* INPUT */
 .chat-input-area {
   padding: 12px;
   background: white;
   border-top: 1px solid #eee;
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .chat-input-area input {
   flex: 1;
-  padding: 10px;
-  border: 1px solid #e1e8ed;
-  border-radius: 20px;
+  padding: 10px 14px;
+  border: 1px solid #e1e8ed; 
+  border-radius: 20px; 
   outline: none;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+  min-width: 0;
 }
 
-.chat-input-area input:focus {
-  border-color: #667eea;
-}
+.chat-input-area input:focus { border-color: #667eea; }
 
 .send-btn {
-  background: #667eea;
-  color: white;
+  background: #667eea; 
+  color: white; 
   border: none;
-  width: 40px;
-  height: 40px;
+  width: 40px; 
+  height: 40px; 
   border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
+  cursor: pointer; 
+  display: flex; 
+  align-items: center; 
   justify-content: center;
+  flex-shrink: 0;
 }
 
-/* Empty State */
-.chat-empty {
-  flex: 1;
+.empty-list {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  color: #888;
-  padding: 20px;
-  text-align: center;
+  align-items: center;
+  height: 100%;
 }
 
 @media (max-width: 480px) {
-  .chat-box {
-    width: calc(100vw - 40px);
-    height: 60vh;
-  }
+  .chat-box { width: calc(100vw - 32px); height: 60vh; }
 }
-/* ... existing styles ... */
-
-.message {
-  max-width: 80%;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 14px;
-  position: relative;
-  word-wrap: break-word;
-  padding-bottom: 18px; /* Extra space for ticks */
-}
-
-/* ... existing .sent and .received styles ... */
-
-.message.sent {
-  align-self: flex-end;
-  background: #667eea;
-  color: white;
-  border-bottom-right-radius: 2px;
-}
-
-.message.received {
-  align-self: flex-start;
-  background: white;
-  color: #333;
-  border: 1px solid #e1e8ed;
-  border-bottom-left-radius: 2px;
-}
-
-/* --- NEW STATUS STYLES --- */
-.message-status {
-  position: absolute;
-  bottom: 2px;
-  right: 6px;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.7); /* Light gray for unread sent messages */
-  display: flex;
-  align-items: center;
-}
-
-.message-status.read {
-  color: #69f0ae; /* Greenish/Blue for read */
-}
-
-.message-status .double-check {
-  display: flex;
-  align-items: center;
-}
-
-/* ... existing input styles ... */
