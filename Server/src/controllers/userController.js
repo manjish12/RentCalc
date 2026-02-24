@@ -101,3 +101,16 @@ export const resetTenantPassword = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+// Add this new function at the bottom
+export const savePushToken = async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: "Token required" });
+
+  try {
+    await User.findByIdAndUpdate(req.user.id, { pushToken: token });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to save token" });
+  }
+};
+

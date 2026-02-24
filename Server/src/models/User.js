@@ -11,6 +11,7 @@ const userSchema = new mongoose.Schema({
   linkedOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   qrImageUrl: { type: String, default: null },
   mustChangePassword: { type: Boolean, default: false },
+  pushToken: { type: String, default: null },
   
   // --- PASSWORD HISTORY SCHEMA ---
   passwordHistory: [{

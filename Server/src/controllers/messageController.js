@@ -1,6 +1,12 @@
 import Message from '../models/Message.js';
+import User from '../models/User.js';
+import { Expo } from 'expo-server-sdk';
+export const expoClient = new Expo();
 
-// Get conversation between two users
+
+// ===============================
+// Get conversation between 2 users
+// ===============================
 export const getMessages = async (req, res) => {
   try {
     const { otherUserId } = req.params;
@@ -19,12 +25,16 @@ export const getMessages = async (req, res) => {
   }
 };
 
-// Send a message
+
+// ===============================
+// Send Message (with Push Notification)
+// ===============================
 export const sendMessage = async (req, res) => {
   try {
     const { receiverId, text } = req.body;
     const senderId = req.user._id;
 
+    // Save message
     const newMessage = await Message.create({
       senderId,
       receiverId,
@@ -32,48 +42,87 @@ export const sendMessage = async (req, res) => {
       isRead: false
     });
 
-    // Real-time: Send message to receiver
+    // ===============================
+    // Real-time Socket Emit
+    // ===============================
     const receiverSocketId = global.onlineUsers.get(receiverId.toString());
     if (receiverSocketId) {
       req.io.to(receiverSocketId).emit('receive-message', newMessage);
     }
 
+    // ===============================
+    // Push Notification (Expo)
+    // ===============================
+    const receiver = await User.findById(receiverId);
+    const sender = await User.findById(senderId);
+
+    if (
+      receiver?.pushToken &&
+      Expo.isExpoPushToken(receiver.pushToken)
+    ) {
+      const message = {
+        to: receiver.pushToken,
+        sound: 'default',
+        title: `New Message from ${sender.name}`,
+        body: text,
+        data: {
+          messageId: newMessage._id,
+          senderId: senderId
+        },
+      };
+
+      await expoClient.sendPushNotificationsAsync([message]);
+    }
+
     res.status(201).json(newMessage);
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-// Mark messages as read
+
+// ===============================
+// Mark Messages as Read
+// ===============================
 export const markMessagesRead = async (req, res) => {
   try {
     const { otherUserId } = req.body;
     const currentUserId = req.user._id;
 
-    // Update all messages sent by the OTHER user to ME as read
+    // Mark messages as read
     await Message.updateMany(
-      { senderId: otherUserId, receiverId: currentUserId, isRead: false },
+      {
+        senderId: otherUserId,
+        receiverId: currentUserId,
+        isRead: false
+      },
       { $set: { isRead: true } }
     );
 
-    // Real-time: Notify the SENDER that I read their messages
+    // Notify sender in real-time
     const senderSocketId = global.onlineUsers.get(otherUserId.toString());
     if (senderSocketId) {
-      req.io.to(senderSocketId).emit('messages-read', { byUserId: currentUserId });
+      req.io.to(senderSocketId).emit('messages-read', {
+        byUserId: currentUserId
+      });
     }
 
     res.json({ success: true });
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-// --- NEW FUNCTION: Get Unread Count ---
+
+// ===============================
+// Get Unread Count
+// ===============================
 export const getUnreadCount = async (req, res) => {
   try {
     const currentUserId = req.user._id;
-    
-    // Aggregate to count unread messages grouped by sender
+
     const unreadStats = await Message.aggregate([
       {
         $match: {
@@ -83,22 +132,27 @@ export const getUnreadCount = async (req, res) => {
       },
       {
         $group: {
-          _id: "$senderId", // Group by the sender
-          count: { $sum: 1 } // Count them
+          _id: "$senderId",
+          count: { $sum: 1 }
         }
       }
     ]);
 
-    // Calculate total
-    const totalUnread = unreadStats.reduce((acc, curr) => acc + curr.count, 0);
+    const totalUnread = unreadStats.reduce(
+      (acc, curr) => acc + curr.count,
+      0
+    );
 
-    // Convert array to a Map-like object: { "userId1": 5, "userId2": 1 }
     const breakdown = {};
     unreadStats.forEach(item => {
       breakdown[item._id] = item.count;
     });
 
-    res.json({ unreadCount: totalUnread, breakdown });
+    res.json({
+      unreadCount: totalUnread,
+      breakdown
+    });
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
