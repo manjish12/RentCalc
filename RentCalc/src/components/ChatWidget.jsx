@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiMessageSquare, FiX, FiSend, FiUser, FiCheck, FiChevronLeft } from 'react-icons/fi';
+import { 
+  FiMessageSquare, FiX, FiSend, FiUser, FiCheck, 
+  FiChevronLeft, FiImage, FiTrash2, FiDownload, FiLoader 
+} from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { messagesAPI } from '../services/api';
+import toast from 'react-hot-toast';
 import '../styles/ChatWidget.css';
 
 const NOTIFICATION_SOUND = 'https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3';
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const ChatWidget = ({ 
   defaultReceiverId = null, 
@@ -16,10 +21,7 @@ const ChatWidget = ({
   const { socket } = useSocket();
   const isOwner = user?.role === 'owner';
   
-  // FIX: Only force list view if we are Owner AND we haven't been given a default chat
-  // If we are Tenant, we ALWAYS want chat view.
   const [currentView, setCurrentView] = useState(isOwner && !defaultReceiverId ? 'list' : 'chat');
-  
   const [isOpen, setIsOpen] = useState(false);
   const [activeReceiverId, setActiveReceiverId] = useState(defaultReceiverId);
   const [activeReceiverName, setActiveReceiverName] = useState(defaultReceiverName);
@@ -27,8 +29,13 @@ const ChatWidget = ({
   const [newMessage, setNewMessage] = useState('');
   const [totalUnread, setTotalUnread] = useState(0);
   const [unreadMap, setUnreadMap] = useState({});
+  const [uploading, setUploading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, message: null });
   
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // --- DYNAMIC TITLE LOGIC ---
   const flashTitle = (text) => {
@@ -46,6 +53,15 @@ const ChatWidget = ({
       document.removeEventListener('click', resetTitle);
     };
   }, []);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu({ visible: false, x: 0, y: 0, message: null });
+    if (contextMenu.visible) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu.visible]);
 
   const playSound = () => {
     try {
@@ -65,8 +81,6 @@ const ChatWidget = ({
       fetchUnreadCounts();
     }
     
-    // CRITICAL FIX FOR TENANT:
-    // If we are passed a default receiver (like Owner), set it active immediately
     if (defaultReceiverId) {
       setActiveReceiverId(defaultReceiverId);
       setActiveReceiverName(defaultReceiverName || "Chat");
@@ -101,7 +115,6 @@ const ChatWidget = ({
   };
 
   const backToList = () => {
-    // Only allow going back if we are an Owner (who has a list)
     if (isOwner) {
       setActiveReceiverId(null);
       setCurrentView('list');
@@ -131,13 +144,10 @@ const ChatWidget = ({
     const handleReceiveMessage = (message) => {
       let senderName = "New Message";
       
-      // Try to find name in list (Owner case)
       if (usersList && usersList.length > 0) {
         const sender = usersList.find(u => u._id === message.senderId);
         if (sender) senderName = sender.name;
-      } 
-      // Fallback for Tenant case (Sender is Owner)
-      else if (message.senderId === defaultReceiverId) {
+      } else if (message.senderId === defaultReceiverId) {
         senderName = defaultReceiverName || "Owner";
       }
 
@@ -150,17 +160,18 @@ const ChatWidget = ({
         if (message.senderId === activeReceiverId) {
           playSound();
           messagesAPI.markMessagesRead(activeReceiverId); 
-          flashTitle(`(${totalUnread + 1}) ${senderName} messaged you`);
+          const notifText = message.messageType === 'image' ? '📷 Sent an image' : message.text;
+          flashTitle(`(${totalUnread + 1}) ${senderName}: ${notifText}`);
         }
-      } 
-      else if (message.receiverId === user._id) {
+      } else if (message.receiverId === user._id) {
         playSound();
         setTotalUnread(prev => prev + 1);
         setUnreadMap(prev => ({
           ...prev,
           [message.senderId]: (prev[message.senderId] || 0) + 1
         }));
-        flashTitle(`(1) ${senderName} messaged you`);
+        const notifText = message.messageType === 'image' ? '📷 Image' : 'messaged you';
+        flashTitle(`(1) ${senderName} ${notifText}`);
       }
     };
 
@@ -172,33 +183,192 @@ const ChatWidget = ({
       }
     };
 
+    const handleMessageDeleted = ({ messageId }) => {
+      setMessages(prev => prev.filter(msg => msg._id !== messageId));
+    };
+
     socket.on('receive-message', handleReceiveMessage);
     socket.on('messages-read', handleMessagesRead);
+    socket.on('message-deleted', handleMessageDeleted);
 
     return () => {
       socket.off('receive-message', handleReceiveMessage);
       socket.off('messages-read', handleMessagesRead);
+      socket.off('message-deleted', handleMessageDeleted);
     };
-  }, [socket, isOpen, currentView, activeReceiverId, user, usersList, defaultReceiverId, defaultReceiverName]);
+  }, [socket, isOpen, currentView, activeReceiverId, user, usersList, defaultReceiverId, defaultReceiverName, totalUnread]);
 
+  // --- SEND TEXT MESSAGE ---
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeReceiverId) return;
 
-    try {
-      const tempMsg = {
-        _id: Date.now(),
-        senderId: user._id,
-        text: newMessage,
-        isRead: false,
-        createdAt: new Date().toISOString()
-      };
-      setMessages(prev => [...prev, tempMsg]);
-      setNewMessage('');
-      setTimeout(scrollToBottom, 100);
+    const tempMsg = {
+      _id: Date.now(),
+      senderId: user._id,
+      text: newMessage,
+      messageType: 'text',
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      sending: true
+    };
+    
+    setMessages(prev => [...prev, tempMsg]);
+    setNewMessage('');
+    setTimeout(scrollToBottom, 100);
 
+    try {
       await messagesAPI.sendMessage(activeReceiverId, newMessage);
-    } catch (error) { console.error('Send failed'); }
+    } catch (error) { 
+      console.error('Send failed');
+      toast.error('Failed to send message');
+      setMessages(prev => prev.filter(m => m._id !== tempMsg._id));
+    }
+  };
+
+  // --- IMAGE HANDLING ---
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setSelectedImage(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPreviewImage(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const cancelImagePreview = () => {
+    setSelectedImage(null);
+    setPreviewImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSendImage = async () => {
+    if (!selectedImage || !activeReceiverId) return;
+
+    setUploading(true);
+
+    // Add temp message with preview
+    const tempMsg = {
+      _id: Date.now(),
+      senderId: user._id,
+      imageUrl: previewImage,
+      messageType: 'image',
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      sending: true
+    };
+    
+    setMessages(prev => [...prev, tempMsg]);
+    setTimeout(scrollToBottom, 100);
+
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          await messagesAPI.sendImage(activeReceiverId, event.target.result);
+          cancelImagePreview();
+        } catch (error) {
+          console.error('Image upload failed:', error);
+          toast.error('Failed to send image');
+          setMessages(prev => prev.filter(m => m._id !== tempMsg._id));
+        } finally {
+          setUploading(false);
+        }
+      };
+      reader.readAsDataURL(selectedImage);
+    } catch (error) {
+      console.error('Image read failed:', error);
+      toast.error('Failed to process image');
+      setMessages(prev => prev.filter(m => m._id !== tempMsg._id));
+      setUploading(false);
+    }
+  };
+
+  // --- CONTEXT MENU (RIGHT CLICK) ---
+  const handleMessageContextMenu = (e, message) => {
+    e.preventDefault();
+    
+    // Only show context menu for:
+    // - Sent messages (for delete)
+    // - Image messages (for download)
+    if (message.senderId !== user._id && message.messageType !== 'image') {
+      return;
+    }
+
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      message
+    });
+  };
+
+  const handleDeleteMessage = async () => {
+    if (!contextMenu.message) return;
+
+    const messageId = contextMenu.message._id;
+    setContextMenu({ visible: false, x: 0, y: 0, message: null });
+
+    try {
+      await messagesAPI.deleteMessage(messageId);
+      setMessages(prev => prev.filter(m => m._id !== messageId));
+      toast.success('Message deleted');
+    } catch (error) {
+      console.error('Delete failed:', error);
+      toast.error('Failed to delete message');
+    }
+  };
+
+  const handleDownloadImage = () => {
+    if (!contextMenu.message?.imageUrl) return;
+
+    const link = document.createElement('a');
+    link.href = contextMenu.message.imageUrl;
+    link.download = `chat_image_${Date.now()}.jpg`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setContextMenu({ visible: false, x: 0, y: 0, message: null });
+    toast.success('Image download started');
+  };
+
+  // --- IMAGE PREVIEW MODAL ---
+  const [fullscreenImage, setFullscreenImage] = useState(null);
+
+  const openFullscreenImage = (imageUrl) => {
+    setFullscreenImage(imageUrl);
+  };
+
+  const closeFullscreenImage = () => {
+    setFullscreenImage(null);
+  };
+
+  // --- FORMAT TIME ---
+  const formatTime = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   if (!user) return null;
@@ -210,13 +380,11 @@ const ChatWidget = ({
           {/* HEADER */}
           <div className="chat-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {/* Only show Back button if Owner AND currently in chat view */}
               {isOwner && currentView === 'chat' && (
                 <button onClick={backToList} className="back-btn">
                   <FiChevronLeft />
                 </button>
               )}
-              {/* Icon Logic: Show User Icon if Tenant OR if Owner in List View */}
               {(!isOwner || currentView === 'list') && (
                 <FiUser style={{ color: 'white', fontSize: '20px' }} />
               )}
@@ -269,39 +437,168 @@ const ChatWidget = ({
                   </p>
                 ) : (
                   messages.map((msg, index) => (
-                    <div key={index} className={`message ${msg.senderId === user._id ? 'sent' : 'received'}`}>
-                      {msg.text}
-                      {msg.senderId === user._id && (
-                        <div className={`message-status ${msg.isRead ? 'read' : ''}`}>
-                          {msg.isRead ? (
-                            <div className="double-check">
-                              <FiCheck size={12} />
-                              <FiCheck size={12} style={{ marginLeft: '-8px' }} />
+                    <div 
+                      key={msg._id || index} 
+                      className={`message ${msg.senderId === user._id ? 'sent' : 'received'} ${msg.messageType === 'image' ? 'image-message' : ''}`}
+                      onContextMenu={(e) => handleMessageContextMenu(e, msg)}
+                    >
+                      {/* IMAGE MESSAGE */}
+                      {msg.messageType === 'image' && msg.imageUrl && (
+                        <div className="message-image-container">
+                          <img 
+                            src={msg.imageUrl} 
+                            alt="Shared" 
+                            className="message-image"
+                            onClick={() => openFullscreenImage(msg.imageUrl)}
+                          />
+                          {msg.sending && (
+                            <div className="image-upload-overlay">
+                              <FiLoader className="spinner" />
                             </div>
-                          ) : (
-                            <FiCheck size={12} />
                           )}
                         </div>
                       )}
+
+                      {/* TEXT MESSAGE */}
+                      {msg.messageType !== 'image' && msg.text && (
+                        <span className="message-text">{msg.text}</span>
+                      )}
+
+                      {/* MESSAGE META */}
+                      <div className="message-meta">
+                        <span className="message-time">{formatTime(msg.createdAt)}</span>
+                        {msg.senderId === user._id && (
+                          <span className={`message-status ${msg.isRead ? 'read' : ''}`}>
+                            {msg.sending ? (
+                              <FiLoader className="spinner" size={10} />
+                            ) : msg.isRead ? (
+                              <span className="double-check">
+                                <FiCheck size={12} />
+                                <FiCheck size={12} style={{ marginLeft: '-8px' }} />
+                              </span>
+                            ) : (
+                              <FiCheck size={12} />
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* IMAGE PREVIEW */}
+              {previewImage && (
+                <div className="image-preview-container">
+                  <img src={previewImage} alt="Preview" className="image-preview" />
+                  <div className="image-preview-actions">
+                    <button 
+                      className="preview-cancel-btn" 
+                      onClick={cancelImagePreview}
+                      disabled={uploading}
+                    >
+                      <FiX /> Cancel
+                    </button>
+                    <button 
+                      className="preview-send-btn" 
+                      onClick={handleSendImage}
+                      disabled={uploading}
+                    >
+                      {uploading ? <FiLoader className="spinner" /> : <FiSend />} 
+                      {uploading ? 'Sending...' : 'Send'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* INPUT AREA */}
               <form className="chat-input-area" onSubmit={handleSendMessage}>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageSelect}
+                  accept="image/*"
+                  hidden
+                />
+                <button 
+                  type="button" 
+                  className="image-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || previewImage}
+                  title="Send Image"
+                >
+                  <FiImage />
+                </button>
                 <input 
                   type="text" 
                   placeholder="Type a message..." 
                   value={newMessage} 
-                  onChange={(e) => setNewMessage(e.target.value)} 
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  disabled={uploading || previewImage}
                 />
-                <button type="submit" className="send-btn"><FiSend /></button>
+                <button 
+                  type="submit" 
+                  className="send-btn"
+                  disabled={!newMessage.trim() || uploading || previewImage}
+                >
+                  <FiSend />
+                </button>
               </form>
             </>
           )}
         </div>
       )}
 
+      {/* CONTEXT MENU */}
+      {contextMenu.visible && (
+        <div 
+          className="context-menu"
+          style={{ 
+            top: contextMenu.y, 
+            left: contextMenu.x,
+            position: 'fixed'
+          }}
+        >
+          {contextMenu.message?.messageType === 'image' && (
+            <button onClick={handleDownloadImage}>
+              <FiDownload /> Download Image
+            </button>
+          )}
+          {contextMenu.message?.senderId === user._id && (
+            <button onClick={handleDeleteMessage} className="delete-option">
+              <FiTrash2 /> Delete Message
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* FULLSCREEN IMAGE MODAL */}
+      {fullscreenImage && (
+        <div className="fullscreen-image-overlay" onClick={closeFullscreenImage}>
+          <button className="fullscreen-close-btn" onClick={closeFullscreenImage}>
+            <FiX />
+          </button>
+          <img 
+            src={fullscreenImage} 
+            alt="Full size" 
+            className="fullscreen-image"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <a 
+            href={fullscreenImage} 
+            download={`image_${Date.now()}.jpg`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="fullscreen-download-btn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FiDownload /> Download
+          </a>
+        </div>
+      )}
+
+      {/* FAB BUTTON */}
       <button className={`chat-fab ${isOpen ? 'open' : ''}`} onClick={() => setIsOpen(!isOpen)}>
         {isOpen ? <FiX /> : <FiMessageSquare />}
         {!isOpen && totalUnread > 0 && (

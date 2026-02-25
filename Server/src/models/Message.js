@@ -13,7 +13,22 @@ const messageSchema = new mongoose.Schema({
   },
   text: {
     type: String,
-    required: true
+    default: ''
+  },
+  // NEW: Image support
+  imageUrl: {
+    type: String,
+    default: null
+  },
+  imagePublicId: {
+    type: String,
+    default: null
+  },
+  // NEW: Message type
+  messageType: {
+    type: String,
+    enum: ['text', 'image'],
+    default: 'text'
   },
   isRead: {
     type: Boolean,
@@ -25,6 +40,7 @@ const messageSchema = new mongoose.Schema({
 
 // Index for faster queries
 messageSchema.index({ senderId: 1, receiverId: 1 });
+messageSchema.index({ receiverId: 1, isRead: 1 });
 
 const Message = mongoose.model('Message', messageSchema);
 export default Message;

@@ -67,9 +67,20 @@ export const notificationsAPI = {
 
 export const messagesAPI = {
   getMessages: (otherUserId) => api.get(`/messages/${otherUserId}`),
-  sendMessage: (receiverId, text) => api.post('/messages', { receiverId, text }),
+  sendMessage: (receiverId, text) => api.post('/messages', { 
+    receiverId, 
+    text, 
+    messageType: 'text' 
+  }),
+  sendImage: (receiverId, imageBase64) => api.post('/messages', { 
+    receiverId, 
+    imageBase64, 
+    messageType: 'image',
+    text: '' 
+  }),
   markMessagesRead: (otherUserId) => api.put('/messages/read', { otherUserId }),
-  getUnreadCount: () => api.get('/messages/unread-count')
+  getUnreadCount: () => api.get('/messages/unread-count'),
+  deleteMessage: (messageId) => api.delete(`/messages/${messageId}`)
 };
 
 export const yearsAPI = {
