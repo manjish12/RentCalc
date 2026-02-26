@@ -602,16 +602,7 @@ const handleMessageContextMenu = (e, message) => {
             className="fullscreen-image"
             onClick={(e) => e.stopPropagation()}
           />
-          <a 
-            href={fullscreenImage} 
-            download={`image_${Date.now()}.jpg`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="fullscreen-download-btn"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <FiDownload /> Download
-          </a>
+         
         </div>
       )}
 
