@@ -384,12 +384,14 @@
    ===================== */
 
 .context-menu {
+  position: fixed;
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   padding: 6px;
-  z-index: 9999; /* High Z-index to sit on top of everything */
-  min-width: 50px;
+  z-index: 9999;
+  min-width: 150px;
+  max-width: calc(100vw - 16px);
   border: 1px solid #f0f0f0;
   animation: scaleIn 0.15s ease-out;
   transform-origin: top left;
