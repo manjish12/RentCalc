@@ -305,23 +305,40 @@ const ChatWidget = ({
   };
 
   // --- CONTEXT MENU (RIGHT CLICK) ---
-  const handleMessageContextMenu = (e, message) => {
-    e.preventDefault();
-    
-    // Only show context menu for:
-    // - Sent messages (for delete)
-    // - Image messages (for download)
-    if (message.senderId !== user._id && message.messageType !== 'image') {
-      return;
-    }
+const handleMessageContextMenu = (e, message) => {
+  e.preventDefault();
 
-    setContextMenu({
-      visible: true,
-      x: e.clientX,
-      y: e.clientY,
-      message
-    });
-  };
+  if (message.senderId !== user._id && message.messageType !== 'image') {
+    return;
+  }
+
+  const menuWidth = 180;
+  const menuHeight = 120;
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
+  let x = e.clientX;
+  let y = e.clientY;
+
+  if (x + menuWidth > viewportWidth) {
+    x = viewportWidth - menuWidth - 10;
+  }
+
+  if (y + menuHeight > viewportHeight) {
+    y = viewportHeight - menuHeight - 10;
+  }
+
+  if (x < 10) x = 10;
+  if (y < 10) y = 10;
+
+  setContextMenu({
+    visible: true,
+    x,
+    y,
+    message
+  });
+};
 
   const handleDeleteMessage = async () => {
     if (!contextMenu.message) return;
