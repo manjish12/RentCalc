@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import Header from '../components/Header';
 import RentHistory from '../components/RentHistory';
 import Loading from '../components/Loading';
-import ChatWidget from '../components/ChatWidget'; // Ensure this path is correct
+import ChatWidget from '../components/ChatWidget';
 import { rentsAPI, usersAPI, messagesAPI } from '../services/api';
 import { sortRentsByDate, formatCurrency, generateCombinedPDF } from '../utils/helpers';
 import { FiX, FiCheck, FiDownload } from 'react-icons/fi';
@@ -25,13 +25,36 @@ const TenantDashboard = () => {
   
   const [ownerName, setOwnerName] = useState('Owner');
 
+  // --- SOCKET NOTIFICATIONS ---
   useEffect(() => {
     if (!socket) return;
-    socket.on('rent-updated', () => {
-      toast.success('Your rent details have been updated'); // Uses standard green check
-      fetchHistory();
-    });
-    return () => socket.off('rent-updated');
+
+    // Listen for rent updates with dynamic message
+    const handleRentUpdate = (data) => {
+      // Use the message from backend if available, otherwise default
+      const message = data?.message || 'Your rent details have been updated';
+      const title = data?.title || 'Rent Update';
+      
+      // Use a custom toast with title
+      toast((t) => (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <strong style={{ fontSize: '14px', marginBottom: '4px' }}>{title}</strong>
+          <span style={{ fontSize: '13px', color: '#555' }}>{message}</span>
+        </div>
+      ), {
+        icon: '🔔',
+        duration: 5000,
+        style: {
+          border: '1px solid #3498db',
+          padding: '12px',
+        },
+      });
+
+      fetchHistory(); // Refresh data
+    };
+
+    socket.on('rent-updated', handleRentUpdate);
+    return () => socket.off('rent-updated', handleRentUpdate);
   }, [socket]);
 
   useEffect(() => {
@@ -205,11 +228,7 @@ const TenantDashboard = () => {
         </div>
       )}
 
-      {/* 
-        FIXED HERE: 
-        Changed `receiverId` to `defaultReceiverId`
-        Changed `receiverName` to `defaultReceiverName`
-      */}
+      {/* CHAT WIDGET - Updated Props */}
       <ChatWidget 
         defaultReceiverId={user?.linkedOwnerId} 
         defaultReceiverName={ownerName} 

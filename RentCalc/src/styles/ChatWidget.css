@@ -380,28 +380,24 @@
 }
 
 /* =====================
-   CONTEXT MENU
+   CONTEXT MENU (Redesigned)
    ===================== */
 
 .context-menu {
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  padding: 5px 0;
-  z-index: 10000;
-  min-width: 160px;
-  animation: fadeIn 0.15s ease;
+  padding: 6px;
+  z-index: 9999; /* High Z-index to sit on top of everything */
+  min-width: 50px;
+  border: 1px solid #f0f0f0;
+  animation: scaleIn 0.15s ease-out;
+  transform-origin: top left;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .context-menu button {
@@ -409,30 +405,36 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 15px;
+  padding: 10px 12px;
   border: none;
-  background: none;
+  background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #2c3e50;
+  font-weight: 500;
+  color: #2d3748;
   text-align: left;
-  transition: background 0.2s;
+  border-radius: 6px;
+  transition: all 0.2s;
 }
 
 .context-menu button:hover {
-  background: #f8f9fa;
+  background: #f7fafc;
+  color: #3498db;
 }
 
+/* Delete Button Specific Styles */
 .context-menu button.delete-option {
-  color: #e74c3c;
+  color: #e53e3e; /* Red text */
 }
 
 .context-menu button.delete-option:hover {
-  background: #fee2e2;
+  background: #fff5f5; /* Light red background */
+  color: #c53030; /* Darker red text */
 }
 
 .context-menu button svg {
-  font-size: 14px;
+  font-size: 15px;
+  opacity: 0.8;
 }
 
 /* =====================

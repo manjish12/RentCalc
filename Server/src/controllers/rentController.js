@@ -1,10 +1,55 @@
 import Rent from '../models/Rent.js';
+import User from '../models/User.js'; // Import User to get Push Token
+import { Expo } from 'expo-server-sdk'; // Import Expo SDK
+
+const expo = new Expo();
 
 const BS_MONTHS = [
   'Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
   'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'
 ];
 
+// ==========================================
+// Helper: Send Notification (Socket + Push)
+// ==========================================
+const sendRentNotification = async (userId, title, body, io) => {
+  try {
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    // 1. Socket.io Notification (For Web & Active App)
+    const socketId = global.onlineUsers?.get(userId.toString());
+    if (socketId && io) {
+      io.to(socketId).emit('rent-updated', { 
+        title: title, 
+        message: body 
+      });
+    }
+
+    // 2. Push Notification (For Mobile Background)
+    if (user.pushToken && Expo.isExpoPushToken(user.pushToken)) {
+      const messages = [{
+        to: user.pushToken,
+        sound: 'default',
+        title: title,
+        body: body,
+        data: { type: 'rent_update' },
+      }];
+
+      try {
+        await expo.sendPushNotificationsAsync(messages);
+      } catch (error) {
+        console.error('Error sending push notification:', error);
+      }
+    }
+  } catch (error) {
+    console.error('Notification logic error:', error);
+  }
+};
+
+// ==========================================
+// Get Rents
+// ==========================================
 export const getRents = async (req, res) => {
   try {
     const { userId } = req.query;
@@ -18,6 +63,9 @@ export const getRents = async (req, res) => {
   }
 };
 
+// ==========================================
+// Create Rent (Single or Multi-Month)
+// ==========================================
 export const createRent = async (req, res) => {
   try {
     const { 
@@ -49,13 +97,11 @@ export const createRent = async (req, res) => {
     const totalElecUsage = Math.max(finalCurrUnit - currentPrevUnit, 0);
     const usagePerMonth = totalElecUsage / multiMonths;
 
-    // --- FIX 1: TRACK DISTRIBUTABLE PAYMENT ---
-    // This variable acts like a wallet. We deduct from it as we create months.
+    // --- PAYMENT DISTRIBUTION LOGIC ---
     let distributablePaidAmount = 0;
     if (paymentStatus === 'partially_paid') {
       distributablePaidAmount = parseFloat(paidAmount) || 0;
     }
-    // ------------------------------------------
 
     for (let i = 0; i < multiMonths; i++) {
       // 1. Calculate Month/Year
@@ -89,7 +135,7 @@ export const createRent = async (req, res) => {
       const monthlyTotal = numRent + numWater + numWaste + elecCost + thisMonthInternetAmount;
       const roundedTotal = Math.round(monthlyTotal * 100) / 100;
 
-      // --- FIX 1 CONTINUED: APPLY PAYMENT LOGIC PER MONTH ---
+      // 6. Apply Payment Logic
       let finalStatus = 'unpaid';
       let finalPaid = 0;
       let finalRemaining = roundedTotal;
@@ -100,18 +146,15 @@ export const createRent = async (req, res) => {
         finalRemaining = 0;
       } 
       else if (paymentStatus === 'partially_paid') {
-        // Take whatever is left in the "wallet", up to the total needed for this month
         finalPaid = Math.min(distributablePaidAmount, roundedTotal);
         finalPaid = Math.round(finalPaid * 100) / 100;
         
         finalRemaining = roundedTotal - finalPaid;
         finalRemaining = Math.round(finalRemaining * 100) / 100;
 
-        // Deduct used amount from the wallet
         distributablePaidAmount -= finalPaid;
 
-        // Determine status based on what we could afford
-        if (finalRemaining <= 0.5) { // Allow small float margin
+        if (finalRemaining <= 0.5) { 
           finalStatus = 'paid';
           finalRemaining = 0;
         } else if (finalPaid > 0) {
@@ -120,7 +163,6 @@ export const createRent = async (req, res) => {
           finalStatus = 'unpaid';
         }
       }
-      // -----------------------------------------------------
 
       const newRent = await Rent.create({
         userId,
@@ -144,9 +186,14 @@ export const createRent = async (req, res) => {
       currentPrevUnit = thisMonthCurrUnit;
     }
 
-    const tenantSocketId = global.onlineUsers.get(userId.toString());
-    if (tenantSocketId) {
-      req.io.to(tenantSocketId).emit('rent-updated');
+    // ➤ SEND NOTIFICATION
+    if (createdRents.length > 0) {
+      await sendRentNotification(
+        userId,
+        'Rent Bills Generated',
+        `Owner added rent bills for ${createdRents.length} month(s) starting ${month} ${year}.`,
+        req.io
+      );
     }
     
     res.status(201).json({ 
@@ -161,6 +208,9 @@ export const createRent = async (req, res) => {
   }
 };
 
+// ==========================================
+// Create Bulk Rents (CSV/Import)
+// ==========================================
 export const createBulkRents = async (req, res) => {
   try {
     const { entries } = req.body;
@@ -168,9 +218,15 @@ export const createBulkRents = async (req, res) => {
 
     const created = await Rent.insertMany(entries);
     
+    // ➤ SEND NOTIFICATION (Assuming all entries for same user)
     if (entries.length > 0) {
-      const tenantSocketId = global.onlineUsers.get(entries[0].userId.toString());
-      if (tenantSocketId) req.io.to(tenantSocketId).emit('rent-updated');
+      const userId = entries[0].userId;
+      await sendRentNotification(
+        userId,
+        'Bulk Rents Added',
+        `${entries.length} rent records have been added to your account.`,
+        req.io
+      );
     }
 
     res.status(201).json(created);
@@ -179,6 +235,9 @@ export const createBulkRents = async (req, res) => {
   }
 };
 
+// ==========================================
+// Update Rent
+// ==========================================
 export const updateRent = async (req, res) => {
   try {
     const { rent, water, waste, prevUnit, currUnit, electricityRate, internetAmount } = req.body;
@@ -186,6 +245,7 @@ export const updateRent = async (req, res) => {
     let newTotal = req.body.total;
     let newRemaining = req.body.remainingAmount;
 
+    // Recalculate if critical fields changed
     if (rent !== undefined && currUnit !== undefined) {
        const elecCost = (parseFloat(currUnit) - parseFloat(prevUnit)) * parseFloat(electricityRate);
        newTotal = parseFloat(rent) + parseFloat(water) + parseFloat(waste) + parseFloat(internetAmount || 0) + elecCost;
@@ -211,8 +271,13 @@ export const updateRent = async (req, res) => {
 
     if (!updatedRent) return res.status(404).json({ error: 'Rent not found' });
 
-    const tenantSocketId = global.onlineUsers.get(updatedRent.userId.toString());
-    if (tenantSocketId) req.io.to(tenantSocketId).emit('rent-updated');
+    // ➤ SEND NOTIFICATION
+    await sendRentNotification(
+      updatedRent.userId,
+      'Rent Updated',
+      `Owner updated your rent for ${updatedRent.month} ${updatedRent.year}.`,
+      req.io
+    );
 
     res.json(updatedRent);
   } catch (error) {
@@ -220,16 +285,24 @@ export const updateRent = async (req, res) => {
   }
 };
 
+// ==========================================
+// Delete Rent
+// ==========================================
 export const deleteRent = async (req, res) => {
   try {
     const rent = await Rent.findById(req.params.id);
     if (!rent) return res.status(404).json({ error: 'Rent not found' });
 
-    const userId = rent.userId;
+    const { userId, month, year } = rent;
     await Rent.findByIdAndDelete(req.params.id);
 
-    const tenantSocketId = global.onlineUsers.get(userId.toString());
-    if (tenantSocketId) req.io.to(tenantSocketId).emit('rent-updated');
+    // ➤ SEND NOTIFICATION
+    await sendRentNotification(
+      userId,
+      'Rent Deleted',
+      `The rent record for ${month} ${year} has been removed.`,
+      req.io
+    );
 
     res.json({ message: 'Rent deleted' });
   } catch (error) {
@@ -237,6 +310,9 @@ export const deleteRent = async (req, res) => {
   }
 };
 
+// ==========================================
+// Apply Bulk Payment
+// ==========================================
 export const applyBulkPayment = async (req, res) => {
   try {
     const { userId, amount, surplusAction } = req.body;
@@ -251,13 +327,11 @@ export const applyBulkPayment = async (req, res) => {
       return res.status(400).json({ error: 'No unpaid rents found' });
     }
 
-    // --- FIX 2: STRICT SORTING (OLDEST FIRST) ---
-    // We sort by Year Ascending, then Month Index Ascending
+    // Sort: Oldest First
     unpaidRents.sort((a, b) => {
       if (a.year !== b.year) return a.year - b.year;
       return BS_MONTHS.indexOf(a.month) - BS_MONTHS.indexOf(b.month);
     });
-    // --------------------------------------------
 
     let remainingAmount = parseFloat(amount);
     const updates = [];
@@ -271,8 +345,8 @@ export const applyBulkPayment = async (req, res) => {
       rent.paidAmount = (rent.paidAmount || 0) + paymentApplied;
       rent.remainingAmount = dueAmount - paymentApplied;
       
-      // Update Status based on remaining amount
-      if (rent.remainingAmount <= 0.5) { // Tolerance for floats
+      // Update Status
+      if (rent.remainingAmount <= 0.5) { 
         rent.paymentStatus = 'paid';
         rent.remainingAmount = 0;
       } else {
@@ -291,8 +365,13 @@ export const applyBulkPayment = async (req, res) => {
       remainingAmount -= paymentApplied;
     }
 
-    const tenantSocketId = global.onlineUsers.get(userId.toString());
-    if (tenantSocketId) req.io.to(tenantSocketId).emit('rent-updated');
+    // ➤ SEND NOTIFICATION
+    await sendRentNotification(
+      userId,
+      'Bulk Payment Applied',
+      `A payment of Rs. ${amount} was applied to your pending bills.`,
+      req.io
+    );
 
     res.json({ 
       message: 'Bulk payment applied successfully', 

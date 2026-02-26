@@ -567,7 +567,7 @@ const ChatWidget = ({
           )}
           {contextMenu.message?.senderId === user._id && (
             <button onClick={handleDeleteMessage} className="delete-option">
-              <FiTrash2 /> Delete Message
+              <FiTrash2 /> 
             </button>
           )}
         </div>
