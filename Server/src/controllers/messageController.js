@@ -112,9 +112,10 @@ export const sendMessage = async (req, res) => {
         title: `New Message from ${sender.name}`,
         body: notificationBody,
         data: {
-          messageId: newMessage._id,
-          senderId: senderId,
-          messageType
+          type: 'chat',             // <--- Add this
+          senderId: senderId,       // <--- Add this
+          senderName: sender.name,  // <--- Add this
+          messageId: newMessage._id
         },
       };
 
