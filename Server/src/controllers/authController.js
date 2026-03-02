@@ -84,21 +84,6 @@ export const login = async (req, res) => {
   }
 };
 
-// ✅ NEW: Logout function that clears push token
-export const logout = async (req, res) => {
-  try {
-    // ✅ Clear push token when user logs out (prevents cross-account notifications)
-    await User.findByIdAndUpdate(req.user._id, {
-      pushToken: null
-    });
-
-    res.json({ message: 'Logged out successfully' });
-  } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({ error: 'Failed to logout' });
-  }
-};
-
 export const getProfile = async (req, res) => {
   try {
     res.json(req.user);
