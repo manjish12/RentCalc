@@ -1,12 +1,17 @@
+// src/components/Header.jsx
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { FiLogOut, FiUser, FiLock } from 'react-icons/fi';
+import { FiLogOut, FiUser, FiLock, FiTrash2, FiEdit2 } from 'react-icons/fi';
 import ChangePasswordModal from './ChangePasswordModal';
+import DeleteAccountModal from './DeleteAccountModal';
+import EditProfileModal from './EditProfileModal'; // ✅ Import new modal
 import '../styles/Header.css';
 
 const Header = () => {
   const { user, logout } = useAuth();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false); // ✅ New state
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = (e) => {
@@ -38,12 +43,36 @@ const Header = () => {
 
         {/* Right side: user + actions */}
         <div className={`header-right ${menuOpen ? 'open' : ''}`}>
-          <div className="header-user">
+          {/* ✅ CLICKABLE USERNAME - Opens Edit Profile Modal */}
+          <button 
+            type="button" 
+            className="header-user header-user-button"
+            onClick={() => {
+              setShowEditProfileModal(true);
+              setMenuOpen(false);
+            }}
+            title="Edit Profile"
+          >
             <FiUser className="header-icon" />
             <span>{user?.name}</span>
-          </div>
+            <FiEdit2 className="header-edit-icon" />
+          </button>
 
-          {/* FULL-ROW BUTTON: icon + text click together */}
+          {/* FULL-ROW BUTTON: Delete Account */}
+          <button
+            type="button"
+            className="header-menu-action header-menu-action--light"
+            onClick={() => {
+              setShowDeleteModal(true);
+              setMenuOpen(false);
+            }}
+            title="Delete Account"
+          >
+            <FiTrash2 className="header-menu-icon" />
+            <span className="header-menu-label">Delete Account</span>
+          </button>
+
+          {/* FULL-ROW BUTTON: Change Password */}
           <button
             type="button"
             className="header-menu-action header-menu-action--light"
@@ -57,7 +86,7 @@ const Header = () => {
             <span className="header-menu-label">Change Password</span>
           </button>
 
-          {/* FULL-ROW BUTTON: icon + text click together */}
+          {/* FULL-ROW BUTTON: Logout */}
           <button
             type="button"
             className="header-menu-action header-menu-action--danger"
@@ -73,6 +102,17 @@ const Header = () => {
         </div>
       </header>
 
+      {/* ✅ Edit Profile Modal */}
+      {showEditProfileModal && (
+        <EditProfileModal onClose={() => setShowEditProfileModal(false)} />
+      )}
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <DeleteAccountModal onClose={() => setShowDeleteModal(false)} />
+      )}
+
+      {/* Change Password Modal */}
       {showPasswordModal && (
         <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
       )}

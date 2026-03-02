@@ -8,6 +8,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import OwnerDashboard from './pages/OwnerDashboard';
 import TenantDashboard from './pages/TenantDashboard';
+import Complaint from './pages/Complaint'; // ✅ Import Complaint screen
+
 import './index.css';
 
 function App() {
@@ -19,6 +21,8 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+                  <Route path="/complaint" element={<Complaint />} /> {/* ✅ Add this route */}
+
             <Route path="/" element={<ProtectedRoute />}>
               <Route index element={<DashboardRouter />} />
             </Route>

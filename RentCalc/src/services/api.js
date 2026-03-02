@@ -1,6 +1,7 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
@@ -36,6 +37,7 @@ export const authAPI = {
   login: (data) => api.post('/auth/login', data),
   getProfile: () => api.get('/auth/profile'),
    changePassword: (data) => api.put('/auth/change-password', data),
+   deleteAccount: (data) => api.delete('/auth/account', {data}),
   // New API
   getPasswordHistory: () => api.get('/auth/password-history')
 };
@@ -46,7 +48,9 @@ export const usersAPI = {
   deleteUser: (id) => api.delete(`/users/${id}`),
   getQR: (id) => api.get(`/users/${id}/qr`),
   uploadQR: (imageBase64) => api.post('/users/qr', { imageBase64 }),
-  resetTenantPassword: (tenantId, newPassword) => api.put('/users/reset-password', { tenantId, newPassword })
+  resetTenantPassword: (tenantId, newPassword) => api.put('/users/reset-password', { tenantId, newPassword }),
+    updateProfile: (data) => api.put('/users/profile', data)
+
 };
 
 export const rentsAPI = {

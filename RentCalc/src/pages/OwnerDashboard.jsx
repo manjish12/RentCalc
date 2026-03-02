@@ -274,7 +274,7 @@ const OwnerDashboard = () => {
                   type="number" 
                   value={newYear} 
                   onChange={(e) => setNewYear(e.target.value)} 
-                  placeholder="Enter year (e.g., 2095)" 
+                  placeholder="Enter New Year " 
                   style={{ padding: '8px', borderRadius: '6px', border: '2px solid #e1e8ed', width: '140px' }}
                 />
                 <button className="btn-primary btn-small" onClick={handleAddYear} disabled={isYearSubmitting}>
