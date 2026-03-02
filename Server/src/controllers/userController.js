@@ -122,24 +122,58 @@ export const uploadQR = async (req, res) => {
   }
 };
 
-export const resetTenantPassword = async (req, res) => {
+// Server/src/controllers/userController.js
+
+exports.resetTenantPassword = async (req, res) => {
   try {
     const { tenantId, newPassword } = req.body;
-    if (req.user.role !== 'owner') return res.status(403).json({ error: 'Unauthorized' });
-    const tenant = await User.findOne({ _id: tenantId, linkedOwnerId: req.user._id });
-    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
-    tenant.passwordHistory.push({
-      hash: tenant.password,
-      changedAt: new Date(),
-      changedBy: `${req.user.name} (Owner)`
-    });
-    if (tenant.passwordHistory.length > 6) tenant.passwordHistory.shift();
-    tenant.password = newPassword;
-    tenant.mustChangePassword = true;
+    const owner = req.user;
+
+    // Verify owner has this tenant
+    const tenant = await User.findById(tenantId);
+    if (!tenant || tenant.linkedOwnerId.toString() !== owner._id.toString()) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    tenant.password = await bcrypt.hash(newPassword, salt);
+    tenant.mustChangePassword = true; // Force tenant to change on next login
     await tenant.save();
-    res.json({ message: 'Tenant password reset' });
+
+    // ✅ CREATE NOTIFICATION FOR TENANT
+    await Notification.create({
+      tenantId: tenant._id,
+      ownerId: owner._id,
+      title: 'Password Reset',
+      message: `Your password has been reset by ${owner.name}. Please log in and change your password immediately.`,
+      type: 'security',
+      isRead: false,
+      createdAt: new Date()
+    });
+
+    // ✅ SEND PUSH NOTIFICATION
+    try {
+      const { sendPushNotification } = require('../utils/pushNotification');
+      await sendPushNotification(tenant.pushToken, {
+        title: '🔒 Password Reset',
+        body: 'Your password was reset by your owner. Please log in and change it.',
+        data: {
+          type: 'password_reset',
+          tenantId: tenant._id.toString()
+        }
+      });
+    } catch (pushError) {
+      console.error('Push notification failed:', pushError);
+      // Don't fail the request if push fails
+    }
+      res.json({ 
+      message: 'Password reset successfully',
+      temporaryPassword: newPassword 
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 };
 
