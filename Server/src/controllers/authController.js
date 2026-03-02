@@ -148,7 +148,6 @@ export const getPasswordHistory = async (req, res) => {
 // ✅ NEW: Delete Account Function
 export const deleteAccount = async (req, res) => {
   try {
-    
     const { password } = req.body;
     const user = await User.findById(req.user._id);
 
