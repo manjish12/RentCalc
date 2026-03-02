@@ -1,7 +1,9 @@
+// src/components/ChatWidget.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FiMessageSquare, FiX, FiSend, FiUser, FiCheck, 
-  FiChevronLeft, FiImage, FiTrash2, FiDownload, FiLoader 
+  FiChevronLeft, FiImage, FiTrash2, FiDownload, FiLoader,
+  FiCopy  // ✅ Added Copy icon
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -305,40 +307,62 @@ const ChatWidget = ({
   };
 
   // --- CONTEXT MENU (RIGHT CLICK) ---
-const handleMessageContextMenu = (e, message) => {
-  e.preventDefault();
+  const handleMessageContextMenu = (e, message) => {
+    e.preventDefault();
 
-  if (message.senderId !== user._id && message.messageType !== 'image') {
-    return;
-  }
+    // Show menu for: text messages (anyone can copy received), or own messages (can delete)
+    if (message.messageType !== 'text' && message.senderId !== user._id) {
+      return;
+    }
 
-  const menuWidth = 180;
-  const menuHeight = 120;
+    const menuWidth = 180;
+    const menuHeight = message.messageType === 'text' ? 150 : 120; // Taller if copy option shown
 
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
-  let x = e.clientX;
-  let y = e.clientY;
+    let x = e.clientX;
+    let y = e.clientY;
 
-  if (x + menuWidth > viewportWidth) {
-    x = viewportWidth - menuWidth - 10;
-  }
+    if (x + menuWidth > viewportWidth) {
+      x = viewportWidth - menuWidth - 10;
+    }
 
-  if (y + menuHeight > viewportHeight) {
-    y = viewportHeight - menuHeight - 10;
-  }
+    if (y + menuHeight > viewportHeight) {
+      y = viewportHeight - menuHeight - 10;
+    }
 
-  if (x < 10) x = 10;
-  if (y < 10) y = 10;
+    if (x < 10) x = 10;
+    if (y < 10) y = 10;
 
-  setContextMenu({
-    visible: true,
-    x,
-    y,
-    message
-  });
-};
+    setContextMenu({
+      visible: true,
+      x,
+      y,
+      message
+    });
+  };
+
+  // ✅ NEW: Copy message to clipboard
+  const handleCopyMessage = async () => {
+    if (!contextMenu.message?.text) return;
+
+    try {
+      await navigator.clipboard.writeText(contextMenu.message.text);
+      toast.success('Message copied to clipboard');
+    } catch (error) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = contextMenu.message.text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      toast.success('Message copied to clipboard');
+    }
+
+    setContextMenu({ visible: false, x: 0, y: 0, message: null });
+  };
 
   const handleDeleteMessage = async () => {
     if (!contextMenu.message) return;
@@ -567,7 +591,7 @@ const handleMessageContextMenu = (e, message) => {
         </div>
       )}
 
-      {/* CONTEXT MENU */}
+      {/* ✅ UPDATED CONTEXT MENU with Copy Option */}
       {contextMenu.visible && (
         <div 
           className="context-menu"
@@ -577,14 +601,24 @@ const handleMessageContextMenu = (e, message) => {
             position: 'fixed'
           }}
         >
+          {/* ✅ Copy option for text messages */}
+          {contextMenu.message?.messageType === 'text' && contextMenu.message?.text && (
+            <button onClick={handleCopyMessage} className="copy-option">
+              <FiCopy /> Copy 
+            </button>
+          )}
+          
+          {/* Download option for images */}
           {contextMenu.message?.messageType === 'image' && (
             <button onClick={handleDownloadImage}>
               <FiDownload /> Download Image
             </button>
           )}
+          
+          {/* Delete option for own messages */}
           {contextMenu.message?.senderId === user._id && (
             <button onClick={handleDeleteMessage} className="delete-option">
-              <FiTrash2 /> 
+              <FiTrash2 /> Delete
             </button>
           )}
         </div>
@@ -602,7 +636,6 @@ const handleMessageContextMenu = (e, message) => {
             className="fullscreen-image"
             onClick={(e) => e.stopPropagation()}
           />
-         
         </div>
       )}
 
