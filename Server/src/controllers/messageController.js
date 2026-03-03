@@ -103,19 +103,21 @@ export const sendMessage = async (req, res) => {
 
     if (receiver?.pushToken && Expo.isExpoPushToken(receiver.pushToken)) {
       const notificationBody = messageType === 'image' 
-        ? '📷 Sent an image' 
+        ? 'Sent an image' 
         : text;
 
       const message = {
         to: receiver.pushToken,
         sound: 'default',
         title: `New Message from ${sender.name}`,
-        body: notificationBody,
+        body: 'Open the app to view the message',
         data: {
           type: 'chat',             // <--- Add this
-          senderId: senderId,       // <--- Add this
+          senderId: senderId.toString()
+,       // <--- Add this
           senderName: sender.name,  // <--- Add this
-          messageId: newMessage._id
+          messageId: newMessage._id.toString()
+
         },
       };
 
