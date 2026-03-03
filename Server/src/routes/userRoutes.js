@@ -8,7 +8,10 @@ import {
   uploadQR, 
   resetTenantPassword,
   updateProfile,
-  savePushToken 
+  savePushToken,
+  clearPushToken,
+  getNotifications,
+  markNotificationAsRead
 } from '../controllers/userController.js';
 import { protect } from '../middleware/auth.js';
 
@@ -22,8 +25,10 @@ router.delete('/:id', deleteUser);
 router.get('/:id/qr', getQR);
 router.post('/qr', uploadQR);
 router.post('/push-token', savePushToken);
+router.delete('/push-token', clearPushToken);
 router.put('/reset-password', resetTenantPassword);
-// ✅ NEW: Update profile route
 router.put('/profile', updateProfile);
+router.get('/notifications', getNotifications);
+router.put('/notifications/:id/read', markNotificationAsRead);
 
 export default router;
