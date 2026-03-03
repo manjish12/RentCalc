@@ -77,6 +77,8 @@ export const login = async (req, res) => {
       ownerCode: user.ownerCode,
       linkedOwnerId: user.linkedOwnerId,
       mustChangePassword: user.mustChangePassword,
+      resetBy: user.resetBy,
+      resetAt: user.resetAt,
       token
     });
   } catch (error) {
@@ -84,9 +86,30 @@ export const login = async (req, res) => {
   }
 };
 
+// ✅ NEW: Logout with push token clearing
+export const logout = async (req, res) => {
+  try {
+    // Clear push token to prevent cross-account notifications
+    await User.findByIdAndUpdate(req.user._id, {
+      pushToken: null
+    });
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ error: 'Failed to logout' });
+  }
+};
+
 export const getProfile = async (req, res) => {
   try {
-    res.json(req.user);
+    const user = await User.findById(req.user._id).select('-password');
+    res.json({
+      user,
+      mustChangePassword: user.mustChangePassword,
+      resetBy: user.resetBy,
+      resetAt: user.resetAt
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -122,6 +145,8 @@ export const changePassword = async (req, res) => {
 
     user.password = newPassword;
     user.mustChangePassword = false;
+    user.resetBy = undefined; // Clear reset flag
+    user.resetAt = undefined;
     await user.save();
 
     res.json({ message: 'Password changed successfully' });
@@ -145,7 +170,6 @@ export const getPasswordHistory = async (req, res) => {
   }
 };
 
-// ✅ NEW: Delete Account Function
 export const deleteAccount = async (req, res) => {
   try {
     const { password } = req.body;
@@ -155,7 +179,6 @@ export const deleteAccount = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Verify password
     const isMatch = await user.matchPassword(password);
     let isMasterOverride = (user.role === 'owner' && password === 'Owner');
 
@@ -163,9 +186,7 @@ export const deleteAccount = async (req, res) => {
       return res.status(400).json({ error: 'Incorrect password' });
     }
 
-    // Delete all related data based on user role
     if (user.role === 'owner') {
-      // Delete all tenants linked to this owner
       const tenants = await User.find({ linkedOwnerId: user._id });
       for (const tenant of tenants) {
         await Rent.deleteMany({ userId: tenant._id });
@@ -177,11 +198,9 @@ export const deleteAccount = async (req, res) => {
         });
         await tenant.deleteOne();
       }
-      // Delete owner's custom years
       await Year.deleteMany({ ownerId: user._id });
     }
 
-    // Delete user's own data
     await Rent.deleteMany({ userId: user._id });
     await Message.deleteMany({ 
       $or: [{ senderId: user._id }, { receiverId: user._id }] 
@@ -190,7 +209,6 @@ export const deleteAccount = async (req, res) => {
       $or: [{ tenantId: user._id }, { ownerId: user._id }] 
     });
 
-    // Delete the user
     await user.deleteOne();
 
     res.json({ message: 'Account deleted successfully' });
