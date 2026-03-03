@@ -5,19 +5,23 @@ import Message from '../models/Message.js';
 import Notification from '../models/Notification.js';
 import Year from '../models/Year.js';
 import bcrypt from 'bcryptjs';
+import { v2 as cloudinary } from 'cloudinary';
+
+// ✅ Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 export const getUsers = async (req, res) => {
   try {
-    // Only owners can see all tenants
-    if (req.user.role !== 'owner') {
-      return res.status(403).json({ error: 'Only owners can view all users' });
+    let users;
+    if (req.user.role === 'owner') {
+      users = await User.find({ linkedOwnerId: req.user._id }).select('-password').sort('name');
+    } else {
+      users = [req.user];
     }
-
-    const users = await User.find({ 
-      role: 'tenant', 
-      linkedOwnerId: req.user._id 
-    }).select('-password');
-    
     res.json(users);
   } catch (error) {
     console.error('Get users error:', error);
@@ -27,34 +31,9 @@ export const getUsers = async (req, res) => {
 
 export const getUser = async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    const user = await User.findById(id).select('-password -__v');
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    // Authorization checks
-    const isOwnProfile = req.user._id.toString() === id;
-    const isOwnerRequestingTenant = req.user.role === 'owner' && user.linkedOwnerId?.toString() === req.user._id.toString();
-    const isTenantRequestingOwner = req.user.role === 'tenant' && user._id.toString() === req.user.linkedOwnerId?.toString();
-    
-    if (!isOwnProfile && !isOwnerRequestingTenant && !isTenantRequestingOwner) {
-      return res.status(403).json({ error: 'Not authorized to view this user' });
-    }
-    
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      qrImageUrl: user.qrImageUrl,
-      ownerCode: user.role === 'owner' ? user.ownerCode : undefined,
-      linkedOwnerId: user.linkedOwnerId
-    });
-    
+    const user = await User.findById(req.params.id).select('-password');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -64,16 +43,8 @@ export const getUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
     
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    // Only owner can delete their tenants
-    if (req.user.role !== 'owner' || user.linkedOwnerId?.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Not authorized to delete this user' });
-    }
-
     await Rent.deleteMany({ userId: user._id });
     await Message.deleteMany({ 
       $or: [{ senderId: user._id }, { receiverId: user._id }] 
@@ -81,126 +52,12 @@ export const deleteUser = async (req, res) => {
     await Notification.deleteMany({ 
       $or: [{ tenantId: user._id }, { ownerId: user._id }] 
     });
-    await user.deleteOne();
-
-    res.json({ message: 'User deleted successfully' });
+    await User.findByIdAndDelete(req.params.id);
+    
+    res.json({ message: 'User deleted' });
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ error: 'Failed to delete user' });
-  }
-};
-
-export const getQR = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    res.json({ 
-      qrImageUrl: user.qrImageUrl || null,
-      qrImageBase64: user.qrImageBase64 || null
-    });
-  } catch (error) {
-    console.error('Get QR error:', error);
-    res.status(500).json({ error: 'Failed to fetch QR code' });
-  }
-};
-
-export const uploadQR = async (req, res) => {
-  try {
-    const { qrImageBase64 } = req.body;
-    
-    if (!qrImageBase64) {
-      return res.status(400).json({ error: 'QR image data required' });
-    }
-
-    const user = await User.findById(req.user._id);
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    user.qrImageBase64 = qrImageBase64;
-    user.qrImageUrl = qrImageBase64;
-    await user.save();
-
-    res.json({ 
-      message: 'QR code uploaded successfully',
-      qrImageUrl: user.qrImageUrl 
-    });
-  } catch (error) {
-    console.error('Upload QR error:', error);
-    res.status(500).json({ error: 'Failed to upload QR code' });
-  }
-};
-
-export const resetTenantPassword = async (req, res) => {
-  try {
-    const { tenantId, newPassword } = req.body;
-    const owner = req.user;
-
-    if (owner.role !== 'owner') {
-      return res.status(403).json({ error: 'Only owners can reset passwords' });
-    }
-
-    const tenant = await User.findById(tenantId);
-    
-    if (!tenant || tenant.linkedOwnerId?.toString() !== owner._id.toString()) {
-      return res.status(404).json({ error: 'Tenant not found' });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    tenant.password = await bcrypt.hash(newPassword, salt);
-    tenant.mustChangePassword = true;
-    
-    // Store who reset the password
-    tenant.resetBy = {
-      name: owner.name,
-      id: owner._id
-    };
-    tenant.resetAt = new Date();
-    
-    await tenant.save();
-
-    // Create notification for tenant
-    await Notification.create({
-      tenantId: tenant._id,
-      ownerId: owner._id,
-      title: 'Password Reset',
-      message: `Your password has been reset by ${owner.name}. Please log in and change your password immediately.`,
-      type: 'security',
-      isRead: false,
-      createdAt: new Date()
-    });
-
-    // Optional: Send push notification (only if pushNotification.js exists)
-    try {
-      if (tenant.pushToken) {
-        // Try to import dynamically - won't crash if file doesn't exist
-        const { sendPushNotification } = await import('../utils/pushNotification.js');
-        await sendPushNotification(tenant.pushToken, {
-          title: '🔒 Password Reset',
-          body: `Your password was reset by ${owner.name}. Please change it now.`,
-          data: {
-            type: 'password_reset',
-            tenantId: tenant._id.toString(),
-            ownerName: owner.name
-          }
-        });
-      }
-    } catch (pushError) {
-      console.log('Push notification skipped (utils/pushNotification.js not found):', pushError.message);
-    }
-
-    res.json({ 
-      message: 'Password reset successfully',
-      temporaryPassword: newPassword 
-    });
-  } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({ error: 'Failed to reset password' });
   }
 };
 
@@ -249,31 +106,110 @@ export const updateProfile = async (req, res) => {
   }
 };
 
+export const getQR = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('qrImageUrl');
+    res.json({ qrImageUrl: user?.qrImageUrl || null });
+  } catch (error) {
+    console.error('Get QR error:', error);
+    res.status(500).json({ error: 'Failed to fetch QR' });
+  }
+};
+
+// ✅ Cloudinary upload for QR codes
+export const uploadQR = async (req, res) => {
+  try {
+    const { imageBase64 } = req.body;
+    if (!imageBase64) return res.status(400).json({ error: 'No image provided' });
+    
+    const result = await cloudinary.uploader.upload(imageBase64, {
+      folder: 'rentcalc_qrs',
+      width: 400,
+      crop: "scale"
+    });
+    
+    await User.findByIdAndUpdate(req.user._id, { qrImageUrl: result.secure_url });
+    
+    res.json({ qrImageUrl: result.secure_url, message: 'QR uploaded successfully' });
+  } catch (error) {
+    console.error('Upload QR error:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+};
+
+export const resetTenantPassword = async (req, res) => {
+  try {
+    const { tenantId, newPassword } = req.body;
+    const owner = req.user;
+
+    const tenant = await User.findById(tenantId);
+    if (!tenant || tenant.linkedOwnerId?.toString() !== owner._id.toString()) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    tenant.password = await bcrypt.hash(newPassword, salt);
+    tenant.mustChangePassword = true;
+    
+    tenant.resetBy = { name: owner.name, id: owner._id };
+    tenant.resetAt = new Date();
+    
+    await tenant.save();
+
+    await Notification.create({
+      tenantId: tenant._id,
+      ownerId: owner._id,
+      title: 'Password Reset',
+      message: `Your password has been reset by ${owner.name}. Please log in and change your password immediately.`,
+      type: 'security',
+      isRead: false,
+      createdAt: new Date()
+    });
+
+    // Optional push notification (won't crash if file missing)
+    try {
+      if (tenant.pushToken) {
+        const { sendPushNotification } = await import('../utils/pushNotification.js');
+        await sendPushNotification(tenant.pushToken, {
+          title: '🔒 Password Reset',
+          body: `Your password was reset by ${owner.name}. Please change it now.`,
+          data: {
+            type: 'password_reset',
+            tenantId: tenant._id.toString(),
+            ownerName: owner.name
+          }
+        });
+      }
+    } catch (pushError) {
+      console.log('Push notification skipped:', pushError.message);
+    }
+
+    res.json({ 
+      message: 'Password reset successfully',
+      temporaryPassword: newPassword 
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+};
+
 export const savePushToken = async (req, res) => {
   try {
     const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "Token required" });
     
-    if (!token) {
-      return res.status(400).json({ error: 'Push token required' });
-    }
-
-    await User.findByIdAndUpdate(req.user._id, {
-      pushToken: token
-    });
-
-    res.json({ message: 'Push token saved successfully' });
+    await User.findByIdAndUpdate(req.user._id, { pushToken: token });
+    res.status(200).json({ success: true });
   } catch (error) {
     console.error('Save push token error:', error);
-    res.status(500).json({ error: 'Failed to save push token' });
+    res.status(500).json({ error: "Failed to save token" });
   }
 };
 
 export const clearPushToken = async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.user._id, {
-      pushToken: null
-    });
-
+    await User.findByIdAndUpdate(req.user._id, { pushToken: null });
     res.json({ message: 'Push token cleared successfully' });
   } catch (error) {
     console.error('Clear push token error:', error);
@@ -289,7 +225,6 @@ export const getNotifications = async (req, res) => {
         { ownerId: req.user._id }
       ]
     }).sort({ createdAt: -1 }).limit(50);
-
     res.json(notifications);
   } catch (error) {
     console.error('Get notifications error:', error);
@@ -299,9 +234,7 @@ export const getNotifications = async (req, res) => {
 
 export const markNotificationAsRead = async (req, res) => {
   try {
-    await Notification.findByIdAndUpdate(req.params.id, {
-      isRead: true
-    });
+    await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
     res.json({ message: 'Notification marked as read' });
   } catch (error) {
     console.error('Mark notification read error:', error);
