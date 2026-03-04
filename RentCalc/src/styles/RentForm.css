@@ -235,3 +235,198 @@
     width: 100%;
   }
 }
+/* ── Add these styles to your existing RentHistory.css ── */
+
+/* View icon button - purple tint to distinguish from others */
+.btn-view-icon {
+  color: #9b59b6;
+}
+.btn-view-icon:hover {
+  background-color: #f3e8ff;
+  color: #7d3c98;
+}
+
+/* Modal Overlay */
+.view-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+/* Modal Box */
+.view-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: modalSlideIn 0.2s ease;
+}
+
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Modal Header */
+.view-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e1e8ed;
+}
+
+.view-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.view-modal-icon {
+  font-size: 22px;
+}
+
+.view-modal-title h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.view-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #7f8c8d;
+  font-size: 20px;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s;
+}
+.view-modal-close:hover {
+  background: #f0f0f0;
+  color: #2c3e50;
+}
+
+/* Modal Body */
+.view-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.view-modal-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.view-detail-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.view-label {
+  font-size: 12px;
+  color: #7f8c8d;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.view-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.view-modal-divider {
+  height: 1px;
+  background: #e1e8ed;
+  margin: 16px 0;
+}
+
+.view-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #3498db;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 12px 0;
+}
+
+/* Payment Summary Box */
+.view-summary-box {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.view-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: #7f8c8d;
+}
+
+.view-summary-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+/* Dates */
+.view-modal-dates {
+  display: flex;
+  gap: 20px;
+  margin-top: 16px;
+  font-size: 11px;
+  color: #95a5a6;
+}
+
+/* Modal Footer */
+.view-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e1e8ed;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.view-modal-footer .btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.view-modal-footer .btn-secondary {
+  background: #f8f9fa;
+  color: #7f8c8d;
+  border: 1px solid #e1e8ed;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.view-modal-footer .btn-secondary:hover {
+  background: #e9ecef;
+}
