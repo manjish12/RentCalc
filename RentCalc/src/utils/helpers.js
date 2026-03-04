@@ -71,11 +71,11 @@ export const generateSinglePDF = (entry, userName) => {
   doc.text(`${entry.month} ${entry.year}`, 16, y);
   
   // Middle: "Units" Label (Inside Gray Bar)
-    doc.setFontSize(11);
-    doc.setTextColor(0, 0, 0); // Black
-    doc.text("Units", 60, y); // Positioned at 60
-    doc.setTextColor(0, 0, 0); // Reset
-    doc.setFont(undefined, 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Units", 60, y);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont(undefined, 'bold');
 
   // Right: Status
   doc.text(`${entry.paymentStatus.toUpperCase()}`, 190, y, null, null, 'right');
@@ -90,10 +90,7 @@ export const generateSinglePDF = (entry, userName) => {
   const elecCost = (units * entry.electricityRate).toFixed(2);
   
   doc.text(`Electricity:`, 20, y);
-  
-  // Value aligns with "Units" header above
   doc.text(`${entry.prevUnit} to ${entry.currUnit}`, 60, y); 
-  
   doc.text(`(${units} units x Rs.${entry.electricityRate})`, 110, y);
   doc.text(`Rs. ${elecCost}`, 190, y, null, null, 'right');
   y += 8;
@@ -136,7 +133,8 @@ export const generateSinglePDF = (entry, userName) => {
   doc.text(`Rs. ${entry.remainingAmount.toFixed(2)}`, 190, y, null, null, 'right');
   doc.setTextColor(0, 0, 0);
   
-  const filename = `rent_${userName.replace(/\s+/g, '_')}_${entry.month}_${entry.year}.pdf`;
+  // ✅ FIXED: Clean filename with spaces preserved and original casing
+  const filename = `${userName} - ${entry.month} ${entry.year}.pdf`;
   doc.save(filename);
 };
 
@@ -184,9 +182,9 @@ export const generateCombinedPDF = (entries, userName) => {
     
     // 2. "Units" Label inside Header
     doc.setFontSize(11);
-    doc.setTextColor(0, 0, 0); // Black
-    doc.text("Units", 60, y); // Positioned at 60
-    doc.setTextColor(0, 0, 0); // Reset
+    doc.setTextColor(0, 0, 0);
+    doc.text("Units", 60, y);
+    doc.setTextColor(0, 0, 0);
     doc.setFont(undefined, 'bold');
 
     // 3. Status
@@ -202,10 +200,7 @@ export const generateCombinedPDF = (entries, userName) => {
     const elecCost = (units * entry.electricityRate).toFixed(2);
     
     doc.text(`Electricity:`, 20, y);
-    
-    // Value matches X=60 from header
     doc.text(`${entry.prevUnit} to ${entry.currUnit}`, 60, y); 
-    
     doc.text(`(${units} units x Rs.${entry.electricityRate})`, 110, y);
     doc.text(`Rs. ${elecCost}`, 190, y, null, null, 'right');
     y += 6;
@@ -284,8 +279,10 @@ export const generateCombinedPDF = (entries, userName) => {
   doc.text(`Rs. ${totalRemaining.toFixed(2)}`, 190, y, null, null, 'right');
   doc.setTextColor(0, 0, 0); 
   
-  const safeName = userName.replace(/\s+/g, '_');
-  const filename = `rent_${safeName}_${startEntry.month}_${startEntry.year}_to_${endEntry.month}_${endEntry.year}.pdf`;
+  // ✅ FIXED: Clean filename with spaces preserved and original casing
+  const filename = sortedEntries.length === 1
+    ? `${userName} - ${startEntry.month} ${startEntry.year}.pdf`
+    : `${userName} - ${startEntry.month} ${startEntry.year} to ${endEntry.month} ${endEntry.year}.pdf`;
   
   doc.save(filename);
 };
