@@ -1,3 +1,4 @@
+//controllers/messageController.js
 import Message from '../models/Message.js';
 import User from '../models/User.js';
 import { Expo } from 'expo-server-sdk';
@@ -97,37 +98,45 @@ export const sendMessage = async (req, res) => {
     }
 
     // ===============================
-    // Push Notification (Expo)
-    // ===============================
-    const sender = await User.findById(senderId);
+// Push Notification (Expo)
+// ===============================
+const sender = await User.findById(senderId);
 
-    if (receiver?.pushToken && Expo.isExpoPushToken(receiver.pushToken)) {
-      const notificationBody = messageType === 'image' 
-        ? 'Sent an image' 
-        : text;
+if (receiver?.pushToken && Expo.isExpoPushToken(receiver.pushToken)) {
+  const notificationBody = messageType === 'image' 
+    ? ' Sent an image' 
+    : text;
 
-      const message = {
-        to: receiver.pushToken,
-        sound: 'default',
-        title: `New Message from ${sender.name}`,
-        body: 'Open the app to view the message',
-        data: {
-          type: 'chat',             // <--- Add this
-          senderId: senderId.toString()
-,       // <--- Add this
-          senderName: sender.name,  // <--- Add this
-          messageId: newMessage._id.toString()
+  const message = {
+    to: receiver.pushToken,
+    sound: 'default',
+    title: ` ${sender.name}`,
+    body: notificationBody,
+    data: {
+      type: 'chat',
+      senderId: senderId.toString(),
+      senderName: sender.name,
+      messageId: newMessage._id.toString()
+    },
+    channelId: 'chat',        // ✅ CRITICAL
+    priority: 'high',         // ✅ CRITICAL
+    badge: 1,
+  };
 
-        },
-      };
-
-      try {
-        await expoClient.sendPushNotificationsAsync([message]);
-      } catch (pushError) {
-        console.error('Push notification error:', pushError);
-        // Don't fail the request if push fails
-      }
+  try {
+    const chunks = expoClient.chunkPushNotifications([message]);
+    const tickets = [];
+    
+    for (let chunk of chunks) {
+      const ticketChunk = await expoClient.sendPushNotificationsAsync(chunk);
+      tickets.push(...ticketChunk);
     }
+    
+    console.log('✅ Chat notification sent:', tickets[0]);
+  } catch (pushError) {
+    console.error('❌ Push notification error:', pushError);
+  }
+}
 
     res.status(201).json(newMessage);
 

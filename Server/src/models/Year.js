@@ -1,3 +1,4 @@
+// models/Year.js
 import mongoose from 'mongoose';
 
 const yearSchema = new mongoose.Schema({

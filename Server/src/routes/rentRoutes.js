@@ -1,3 +1,4 @@
+// routes/rentRoutes.js
 import express from 'express';
 import { getRents, createRent, createBulkRents, updateRent, deleteRent, applyBulkPayment } from '../controllers/rentController.js';
 import { protect } from '../middleware/auth.js';

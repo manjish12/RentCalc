@@ -1,3 +1,4 @@
+// models/Rent.js
 import mongoose from 'mongoose';
 
 const rentSchema = new mongoose.Schema({

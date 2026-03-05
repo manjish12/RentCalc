@@ -1,3 +1,4 @@
+// controllers/rentController.js
 import Rent from '../models/Rent.js';
 import User from '../models/User.js'; // Import User to get Push Token
 import { Expo } from 'expo-server-sdk'; // Import Expo SDK

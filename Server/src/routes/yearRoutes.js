@@ -1,3 +1,4 @@
+ // routes/yearRoutes.js
  import express from 'express';
 import { getYears, addYear, deleteYear } from '../controllers/yearController.js';
 import { protect, authorize } from '../middleware/auth.js';

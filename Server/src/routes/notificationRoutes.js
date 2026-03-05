@@ -1,3 +1,4 @@
+// routes/notificationRoutes.js
 import express from 'express';
 import {
   getNotifications,

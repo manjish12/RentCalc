@@ -156,6 +156,7 @@ export const resetTenantPassword = async (req, res) => {
     
     await tenant.save();
 
+    // ✅ Save notification to database
     await Notification.create({
       tenantId: tenant._id,
       ownerId: owner._id,
@@ -166,22 +167,24 @@ export const resetTenantPassword = async (req, res) => {
       createdAt: new Date()
     });
 
-    // Optional push notification (won't crash if file missing)
-    try {
-      if (tenant.pushToken) {
+    // ✅ Send push notification
+    if (tenant.pushToken && Expo.isExpoPushToken(tenant.pushToken)) {
+      try {
         const { sendPushNotification } = await import('../utils/pushNotification.js');
         await sendPushNotification(tenant.pushToken, {
           title: '🔒 Password Reset',
-          body: `Your password was reset by ${owner.name}. Please change it now.`,
+          body: `${owner.name} reset your password. Change it now in Settings.`,
           data: {
             type: 'password_reset',
             tenantId: tenant._id.toString(),
             ownerName: owner.name
-          }
+          },
+          channelId: 'security' // ✅ Must match app channel
         });
+        console.log('✅ Password reset notification sent');
+      } catch (pushError) {
+        console.error('Push notification failed:', pushError);
       }
-    } catch (pushError) {
-      console.log('Push notification skipped:', pushError.message);
     }
 
     res.json({ 
