@@ -104,13 +104,13 @@ const sender = await User.findById(senderId);
 
 if (receiver?.pushToken && Expo.isExpoPushToken(receiver.pushToken)) {
   const notificationBody = messageType === 'image' 
-    ? ' Sent an image' 
+    ? 'Sent an image' 
     : text;
 
   const message = {
     to: receiver.pushToken,
     sound: 'default',
-    title: ` ${sender.name}`,
+    title: `${sender.name}`,
     body: notificationBody,
     data: {
       type: 'chat',
