@@ -36,30 +36,49 @@ export const sendMessage = async (req, res) => {
     const { receiverId, text, imageBase64, messageType = 'text' } = req.body;
     const senderId = req.user._id;
 
-    if (!receiverId) return res.status(400).json({ error: 'Receiver ID is required' });
+    if (!receiverId) {
+      return res.status(400).json({ error: 'Receiver ID is required' });
+    }
 
+    // Verify receiver exists
     const receiver = await User.findById(receiverId);
-    if (!receiver) return res.status(404).json({ error: 'Receiver not found' });
+    if (!receiver) {
+      return res.status(404).json({ error: 'Receiver not found' });
+    }
 
     let imageUrl = null;
     let imagePublicId = null;
 
-    // 1. Upload Image if exists
+    // ===============================
+    // If image is sent, upload to Cloudinary
+    // ===============================
     if (messageType === 'image' && imageBase64) {
       try {
         const uploadResult = await cloudinary.uploader.upload(imageBase64, {
           folder: 'rentcalc/chat_images',
           resource_type: 'auto',
-          transformation: [{ width: 800, height: 800, crop: 'limit' }]
+          transformation: [
+            { width: 800, height: 800, crop: 'limit' },
+            { quality: 'auto:good' }
+          ]
         });
+
         imageUrl = uploadResult.secure_url;
         imagePublicId = uploadResult.public_id;
-      } catch (err) {
-        return res.status(500).json({ error: 'Image upload failed' });
+      } catch (uploadError) {
+        console.error('Cloudinary upload error:', uploadError);
+        return res.status(500).json({ error: 'Failed to upload image' });
       }
     }
 
-    // 2. Save Message to DB
+    // Validate: must have either text or image
+    if (messageType === 'text' && (!text || !text.trim())) {
+      return res.status(400).json({ error: 'Message text is required' });
+    }
+
+    // ===============================
+    // Save message
+    // ===============================
     const newMessage = await Message.create({
       senderId,
       receiverId,
@@ -70,51 +89,59 @@ export const sendMessage = async (req, res) => {
       isRead: false
     });
 
-    // 3. Socket.io Emit
+    // ===============================
+    // Real-time Socket Emit
+    // ===============================
     const receiverSocketId = global.onlineUsers?.get(receiverId.toString());
     if (receiverSocketId && req.io) {
       req.io.to(receiverSocketId).emit('receive-message', newMessage);
     }
 
-    // ==========================================
-    // 4. PUSH NOTIFICATION (Fixed for Visibility & Style)
-    // ==========================================
-    if (receiver?.pushToken && Expo.isExpoPushToken(receiver.pushToken)) {
-      const sender = await User.findById(senderId);
-      
-      const pushMessage = {
-        to: receiver.pushToken,
-        sound: 'default',
-        title: sender.name, // Shows sender name
-        body: messageType === 'image' ? '📷 Sent a photo' : text,
-        data: {
-          type: 'chat',
-          senderId: senderId.toString(),
-          senderName: sender.name,
-          messageId: newMessage._id.toString()
-        },
-        channelId: 'chat', // ✅ MATCHES APP.JS (Crucial for visibility)
-        priority: 'high',  // ✅ Heads-up notification
-        badge: 1,
-      };
+    // ===============================
+// Push Notification (Expo)
+// ===============================
+const sender = await User.findById(senderId);
 
-      // ✅ ADD BIG PICTURE STYLE
-      if (messageType === 'image' && imageUrl) {
-        pushMessage.image = imageUrl; // Shows the image in notification
-      }
+if (receiver?.pushToken && Expo.isExpoPushToken(receiver.pushToken)) {
+  const notificationBody = messageType === 'image' 
+    ? ' Sent an image' 
+    : text;
 
-      try {
-        await expoClient.sendPushNotificationsAsync([pushMessage]);
-        console.log('✅ Notification sent to', receiver.name);
-      } catch (error) {
-        console.error('❌ Notification failed:', error);
-      }
+  const message = {
+    to: receiver.pushToken,
+    sound: 'default',
+    title: ` ${sender.name}`,
+    body: notificationBody,
+    data: {
+      type: 'chat',
+      senderId: senderId.toString(),
+      senderName: sender.name,
+      messageId: newMessage._id.toString()
+    },
+    channelId: 'chat',        // ✅ CRITICAL
+    priority: 'high',         // ✅ CRITICAL
+    badge: 1,
+  };
+
+  try {
+    const chunks = expoClient.chunkPushNotifications([message]);
+    const tickets = [];
+    
+    for (let chunk of chunks) {
+      const ticketChunk = await expoClient.sendPushNotificationsAsync(chunk);
+      tickets.push(...ticketChunk);
     }
+    
+    console.log('✅ Chat notification sent:', tickets[0]);
+  } catch (pushError) {
+    console.error('❌ Push notification error:', pushError);
+  }
+}
 
     res.status(201).json(newMessage);
 
   } catch (error) {
-    console.error('Message error:', error);
+    console.error('Send message error:', error);
     res.status(500).json({ error: error.message });
   }
 };
