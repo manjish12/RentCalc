@@ -113,8 +113,7 @@ export const sendMessage = async (req, res) => {
         body: 'Open the app to view the message',
         data: {
           type: 'chat',             // <--- Add this
-          senderId: senderId.toString()
-,       // <--- Add this
+          senderId: senderId.toString(), // <--- Add this
           senderName: sender.name,  // <--- Add this
           messageId: newMessage._id.toString()
 
