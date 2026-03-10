@@ -94,97 +94,96 @@ export const sendMessage = async (req, res) => {
       req.io.to(receiverSocketId).emit('receive-message', newMessage);
     }
 
-    // ============================================
-    // FIXED: Push Notification for Android
-    // ============================================
-    const sender = await User.findById(senderId);
+// ============================================
+// FIXED: Push Notification for Android
+// ============================================
+const sender = await User.findById(senderId);
 
-    if (receiver?.pushToken) {
-      // Validate token format
-      if (!Expo.isExpoPushToken(receiver.pushToken)) {
-        console.log('❌ Invalid Expo push token format:', receiver.pushToken.substring(0, 20));
-      } else {
-        // Prepare notification content
-        const notificationBody = messageType === 'image' 
-          ? '📷 Sent an image' 
-          : (text?.substring(0, 100) || 'New message');
-        
-        const notificationTitle = sender.name || 'New Message';
+if (receiver?.pushToken) {
+  // Validate token format
+  if (!Expo.isExpoPushToken(receiver.pushToken)) {
+    console.log('❌ Invalid Expo push token format:', receiver.pushToken.substring(0, 20));
+  } else {
+    // Prepare notification content
+    const notificationBody = messageType === 'image'
+      ? '📷 Sent an image'
+      : (text?.substring(0, 100) || 'New message');
+    
+    const notificationTitle = sender.name || 'New Message';
 
-        // Create notification message with Android-specific fields
-        const message = {
-          to: receiver.pushToken,
-          sound: 'default',
-          title: notificationTitle,
-          body: notificationBody,
-          data: {
-            type: 'chat',
-            senderId: senderId.toString(),
-            senderName: sender.name,
-            messageId: newMessage._id.toString(),
-            messageType: messageType,
-            timestamp: new Date().toISOString()
-          },
-          // Android specific
-          channelId: 'chat',              // Must match Android channel
-          priority: 'high',                // High priority for Android
-          badge: 1,
-          // Additional Android options
-          _displayInForeground: true,
-          _category: 'chat',
-          // For Android heads-up notification
-          android: {
-            channelId: 'chat',
-            priority: 'high',
-            sound: 'default',
-            vibrate: true,
-            color: '#3498db'
-          }
-        };
+    // Create notification message with Android-specific fields
+    const message = {
+      to: receiver.pushToken,
+      sound: 'default',
+      title: notificationTitle,
+      body: notificationBody,
+      data: {
+        type: 'chat',
+        senderId: senderId.toString(),
+        senderName: sender.name,
+        messageId: newMessage._id.toString(),
+        messageType: messageType,
+        timestamp: new Date().toISOString()
+      },
+      // Android specific
+      channelId: 'chat', // Must match Android channel
+      priority: 'high', // High priority for Android
+      badge: 1,
+      // Additional Android options
+      _displayInForeground: true,
+      _category: 'chat',
+      // For Android heads-up notification
+      android: {
+        channelId: 'chat',
+        priority: 'high',
+        sound: 'default',
+        vibrate: true,
+        color: '#3498db'
+      }
+    };
 
-        try {
-          // Send notification
-          const chunks = expoClient.chunkPushNotifications([message]);
-          const tickets = [];
+    try {
+      // Send notification
+      const chunks = expoClient.chunkPushNotifications([message]);
+      const tickets = [];
+      
+      for (let chunk of chunks) {
+        const ticketChunk = await expoClient.sendPushNotificationsAsync(chunk);
+        tickets.push(...ticketChunk);
+      }
+      
+      console.log('✅ Chat notification sent:', tickets[0]?.id);
+
+      // Check for errors in tickets
+      for (let ticket of tickets) {
+        if (ticket.status === 'error') {
+          console.error('❌ Push ticket error:', ticket.message);
           
-          for (let chunk of chunks) {
-            const ticketChunk = await expoClient.sendPushNotificationsAsync(chunk);
-            tickets.push(...ticketChunk);
+          // Handle specific errors
+          if (ticket.details?.error === 'DeviceNotRegistered') {
+            // Token is invalid - remove it
+            await User.findByIdAndUpdate(receiver._id, {
+              $set: { pushToken: null }
+            });
+            console.log('✅ Removed invalid push token for user:', receiver._id);
           }
           
-          console.log('✅ Chat notification sent:', tickets[0]?.id);
-
-          // Check for errors in tickets
-          for (let ticket of tickets) {
-            if (ticket.status === 'error') {
-              console.error('❌ Push ticket error:', ticket.message);
-              
-              // Handle specific errors
-              if (ticket.details?.error === 'DeviceNotRegistered') {
-                // Token is invalid - remove it
-                await User.findByIdAndUpdate(receiver._id, { 
-                  $set: { pushToken: null } 
-                });
-                console.log('✅ Removed invalid push token for user:', receiver._id);
-              }
-              
-              if (ticket.details?.error === 'MessageTooBig') {
-                console.error('❌ Push message too big');
-              }
-            }
-          }
-        } catch (pushError) {
-          console.error('❌ Push notification error:', pushError);
-          
-          // Log detailed error for debugging
-          if (pushError.response) {
-            console.error('Push API response:', pushError.response.data);
+          if (ticket.details?.error === 'MessageTooBig') {
+            console.error('❌ Push message too big');
           }
         }
       }
-    } else {
-      console.log('ℹ️ No push token for receiver:', receiverId);
+    } catch (pushError) {
+      console.error('❌ Push notification error:', pushError);
+      // Log detailed error for debugging
+      if (pushError.response) {
+        console.error('Push API response:', pushError.response.data);
+      }
     }
+  }
+} else {
+  console.log('ℹ️ No push token for receiver:', receiverId);
+}
 
     res.status(201).json(newMessage);
 

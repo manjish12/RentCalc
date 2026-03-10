@@ -198,6 +198,7 @@ export const resetTenantPassword = async (req, res) => {
 };
 
 // controllers/userController.js - Update savePushToken function
+// controllers/userController.js - Update savePushToken function
 export const savePushToken = async (req, res) => {
   try {
     const { token } = req.body;
@@ -206,23 +207,22 @@ export const savePushToken = async (req, res) => {
       return res.status(400).json({ error: "Token required" });
     }
 
-    // Validate token format
-    const isValidExpoToken = token.startsWith('ExponentPushToken[') || 
-                            token.startsWith('ExpoPushToken[');
+    // ✅ FIXED: Validate token format (Expo tokens always start with 'ExponentPushToken[')
+    const isValidExpoToken = token?.startsWith('ExponentPushToken[');
     
     console.log('📱 Saving push token for user:', req.user._id);
     console.log('🔑 Token format valid:', isValidExpoToken);
     console.log('🔑 Token preview:', token.substring(0, 30) + '...');
 
     // Update user with new token
-    await User.findByIdAndUpdate(req.user._id, { 
+    await User.findByIdAndUpdate(req.user._id, {
       pushToken: token,
       pushTokenUpdatedAt: new Date()
     });
 
     console.log('✅ Push token saved successfully');
     
-    res.status(200).json({ 
+    res.status(200).json({
       success: true,
       message: 'Push token saved'
     });
