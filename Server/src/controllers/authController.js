@@ -190,6 +190,16 @@ export const getPasswordHistory = async (req, res) => {
   }
 };
 
+export const updatePushToken = async (req, res) => {
+  try {
+    const { pushToken } = req.body;
+    await User.findByIdAndUpdate(req.user._id, { pushToken });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const deleteAccount = async (req, res) => {
   try {
     const { password } = req.body;
