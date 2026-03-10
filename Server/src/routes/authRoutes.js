@@ -16,6 +16,7 @@ const router = express.Router();
 router.post('/register', register);
 router.post('/login', login);
 router.post('/logout', protect, logout);
+router.post('/push-token', protect, updatePushToken);
 router.get('/profile', protect, getProfile);
 router.put('/change-password', protect, changePassword);
 router.get('/password-history', protect, getPasswordHistory);
