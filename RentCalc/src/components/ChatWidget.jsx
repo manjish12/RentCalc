@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   FiMessageSquare, FiX, FiSend, FiUser, FiCheck, 
-  FiChevronLeft, FiImage, FiTrash2, FiDownload, FiLoader,
-  FiCopy  // ✅ Added Copy icon
+  FiChevronLeft, FiImage, FiTrash2, FiDownload,
+  FiCopy
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -156,12 +156,17 @@ const ChatWidget = ({
       if (isOpen && currentView === 'chat' && 
          (message.senderId === activeReceiverId || message.senderId === user._id)) {
         
-        setMessages(prev => [...prev, message]);
+        setMessages(prev => {
+          // Avoid duplicates
+          if (prev.some(m => m._id === message._id)) return prev;
+          return [...prev, message];
+        });
+        
         setTimeout(scrollToBottom, 100);
 
         if (message.senderId === activeReceiverId) {
           playSound();
-          messagesAPI.markMessagesRead(activeReceiverId); 
+          messagesAPI.markMessagesRead(activeReceiverId);
           const notifText = message.messageType === 'image' ? '📷 Sent an image' : message.text;
           flashTitle(`(${totalUnread + 1}) ${senderName}: ${notifText}`);
         }
@@ -200,46 +205,56 @@ const ChatWidget = ({
     };
   }, [socket, isOpen, currentView, activeReceiverId, user, usersList, defaultReceiverId, defaultReceiverName, totalUnread]);
 
-  // --- SEND TEXT MESSAGE ---
+  // --- SEND TEXT MESSAGE (WITH OPTIMISTIC UPDATE) ---
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeReceiverId) return;
 
-    const tempMsg = {
-      _id: Date.now(),
+    // ✅ Create temporary message object
+    const tempMessage = {
+      _id: Date.now().toString(), // Temporary ID
       senderId: user._id,
+      receiverId: activeReceiverId,
       text: newMessage,
       messageType: 'text',
       isRead: false,
       createdAt: new Date().toISOString(),
-      sending: true
+      sending: true // Flag to show it's being sent
     };
-    
-    setMessages(prev => [...prev, tempMsg]);
+
+    // ✅ Optimistically add message to UI immediately
+    setMessages(prev => [...prev, tempMessage]);
     setNewMessage('');
     setTimeout(scrollToBottom, 100);
 
     try {
-      await messagesAPI.sendMessage(activeReceiverId, newMessage);
+      // Send via API
+      const response = await messagesAPI.sendMessage(activeReceiverId, newMessage);
+      
+      // ✅ Replace temp message with real message from server
+      setMessages(prev => 
+        prev.map(msg => 
+          msg._id === tempMessage._id ? response.data : msg
+        )
+      );
     } catch (error) { 
-      console.error('Send failed');
+      console.error('Send failed:', error);
       toast.error('Failed to send message');
-      setMessages(prev => prev.filter(m => m._id !== tempMsg._id));
+      // ✅ Remove temp message on error
+      setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
     }
   };
 
-  // --- IMAGE HANDLING ---
+  // --- IMAGE HANDLING (WITH OPTIMISTIC UPDATE) ---
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file');
       return;
     }
 
-    // Validate file size
     if (file.size > MAX_IMAGE_SIZE) {
       toast.error('Image must be less than 5MB');
       return;
@@ -247,7 +262,6 @@ const ChatWidget = ({
 
     setSelectedImage(file);
 
-    // Create preview
     const reader = new FileReader();
     reader.onload = (event) => {
       setPreviewImage(event.target.result);
@@ -268,31 +282,41 @@ const ChatWidget = ({
 
     setUploading(true);
 
-    // Add temp message with preview
-    const tempMsg = {
-      _id: Date.now(),
+    // ✅ Create temporary message
+    const tempMessage = {
+      _id: Date.now().toString(),
       senderId: user._id,
+      receiverId: activeReceiverId,
       imageUrl: previewImage,
       messageType: 'image',
       isRead: false,
       createdAt: new Date().toISOString(),
       sending: true
     };
-    
-    setMessages(prev => [...prev, tempMsg]);
+
+    // ✅ Add to UI immediately
+    setMessages(prev => [...prev, tempMessage]);
     setTimeout(scrollToBottom, 100);
 
     try {
-      // Convert file to base64
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
-          await messagesAPI.sendImage(activeReceiverId, event.target.result);
+          const response = await messagesAPI.sendImage(activeReceiverId, event.target.result);
           cancelImagePreview();
+          
+          // ✅ Replace temp message with real message
+          setMessages(prev => 
+            prev.map(msg => 
+              msg._id === tempMessage._id ? response.data : msg
+            )
+          );
+          setTimeout(scrollToBottom, 100);
         } catch (error) {
           console.error('Image upload failed:', error);
           toast.error('Failed to send image');
-          setMessages(prev => prev.filter(m => m._id !== tempMsg._id));
+          // ✅ Remove temp message on error
+          setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
         } finally {
           setUploading(false);
         }
@@ -301,7 +325,7 @@ const ChatWidget = ({
     } catch (error) {
       console.error('Image read failed:', error);
       toast.error('Failed to process image');
-      setMessages(prev => prev.filter(m => m._id !== tempMsg._id));
+      setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
       setUploading(false);
     }
   };
@@ -310,13 +334,12 @@ const ChatWidget = ({
   const handleMessageContextMenu = (e, message) => {
     e.preventDefault();
 
-    // Show menu for: text messages (anyone can copy received), or own messages (can delete)
     if (message.messageType !== 'text' && message.senderId !== user._id) {
       return;
     }
 
     const menuWidth = 180;
-    const menuHeight = message.messageType === 'text' ? 150 : 120; // Taller if copy option shown
+    const menuHeight = message.messageType === 'text' ? 150 : 120;
 
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
@@ -343,7 +366,6 @@ const ChatWidget = ({
     });
   };
 
-  // ✅ NEW: Copy message to clipboard
   const handleCopyMessage = async () => {
     if (!contextMenu.message?.text) return;
 
@@ -351,7 +373,6 @@ const ChatWidget = ({
       await navigator.clipboard.writeText(contextMenu.message.text);
       toast.success('Message copied to clipboard');
     } catch (error) {
-      // Fallback for older browsers
       const textArea = document.createElement('textarea');
       textArea.value = contextMenu.message.text;
       document.body.appendChild(textArea);
@@ -372,7 +393,6 @@ const ChatWidget = ({
 
     try {
       await messagesAPI.deleteMessage(messageId);
-      setMessages(prev => prev.filter(m => m._id !== messageId));
       toast.success('Message deleted');
     } catch (error) {
       console.error('Delete failed:', error);
@@ -480,7 +500,7 @@ const ChatWidget = ({
                   messages.map((msg, index) => (
                     <div 
                       key={msg._id || index} 
-                      className={`message ${msg.senderId === user._id ? 'sent' : 'received'} ${msg.messageType === 'image' ? 'image-message' : ''}`}
+                      className={`message ${msg.senderId === user._id ? 'sent' : 'received'} ${msg.messageType === 'image' ? 'image-message' : ''} ${msg.sending ? 'sending' : ''}`}
                       onContextMenu={(e) => handleMessageContextMenu(e, msg)}
                     >
                       {/* IMAGE MESSAGE */}
@@ -494,7 +514,7 @@ const ChatWidget = ({
                           />
                           {msg.sending && (
                             <div className="image-upload-overlay">
-                              <FiLoader className="spinner" />
+                              <div className="spinner"></div>
                             </div>
                           )}
                         </div>
@@ -511,7 +531,7 @@ const ChatWidget = ({
                         {msg.senderId === user._id && (
                           <span className={`message-status ${msg.isRead ? 'read' : ''}`}>
                             {msg.sending ? (
-                              <FiLoader className="spinner" size={10} />
+                              <div className="spinner-small"></div>
                             ) : msg.isRead ? (
                               <span className="double-check">
                                 <FiCheck size={12} />
@@ -546,8 +566,7 @@ const ChatWidget = ({
                       onClick={handleSendImage}
                       disabled={uploading}
                     >
-                      {uploading ? <FiLoader className="spinner" /> : <FiSend />} 
-                      {uploading ? 'Sending...' : 'Send'}
+                      {uploading ? 'Sending...' : <><FiSend /> Send</>} 
                     </button>
                   </div>
                 </div>
@@ -591,7 +610,7 @@ const ChatWidget = ({
         </div>
       )}
 
-      {/* ✅ UPDATED CONTEXT MENU with Copy Option */}
+      {/* CONTEXT MENU */}
       {contextMenu.visible && (
         <div 
           className="context-menu"
@@ -601,21 +620,18 @@ const ChatWidget = ({
             position: 'fixed'
           }}
         >
-          {/* ✅ Copy option for text messages */}
           {contextMenu.message?.messageType === 'text' && contextMenu.message?.text && (
             <button onClick={handleCopyMessage} className="copy-option">
               <FiCopy /> Copy 
             </button>
           )}
           
-          {/* Download option for images */}
           {contextMenu.message?.messageType === 'image' && (
             <button onClick={handleDownloadImage}>
               <FiDownload /> Download Image
             </button>
           )}
           
-          {/* Delete option for own messages */}
           {contextMenu.message?.senderId === user._id && (
             <button onClick={handleDeleteMessage} className="delete-option">
               <FiTrash2 /> Delete
