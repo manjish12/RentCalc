@@ -35,6 +35,7 @@ const ChatWidget = ({
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, message: null });
+  const [fullscreenImage, setFullscreenImage] = useState(null);
   
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -191,6 +192,7 @@ const ChatWidget = ({
     };
 
     const handleMessageDeleted = ({ messageId }) => {
+      // Immediately remove the message from UI when socket event is received
       setMessages(prev => prev.filter(msg => msg._id !== messageId));
     };
 
@@ -210,7 +212,7 @@ const ChatWidget = ({
     e.preventDefault();
     if (!newMessage.trim() || !activeReceiverId) return;
 
-    // ✅ Create temporary message object
+    // Create temporary message object
     const tempMessage = {
       _id: Date.now().toString(), // Temporary ID
       senderId: user._id,
@@ -222,7 +224,7 @@ const ChatWidget = ({
       sending: true // Flag to show it's being sent
     };
 
-    // ✅ Optimistically add message to UI immediately
+    // Optimistically add message to UI immediately
     setMessages(prev => [...prev, tempMessage]);
     setNewMessage('');
     setTimeout(scrollToBottom, 100);
@@ -231,7 +233,7 @@ const ChatWidget = ({
       // Send via API
       const response = await messagesAPI.sendMessage(activeReceiverId, newMessage);
       
-      // ✅ Replace temp message with real message from server
+      // Replace temp message with real message from server
       setMessages(prev => 
         prev.map(msg => 
           msg._id === tempMessage._id ? response.data : msg
@@ -240,7 +242,7 @@ const ChatWidget = ({
     } catch (error) { 
       console.error('Send failed:', error);
       toast.error('Failed to send message');
-      // ✅ Remove temp message on error
+      // Remove temp message on error
       setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
     }
   };
@@ -282,7 +284,7 @@ const ChatWidget = ({
 
     setUploading(true);
 
-    // ✅ Create temporary message
+    // Create temporary message
     const tempMessage = {
       _id: Date.now().toString(),
       senderId: user._id,
@@ -294,7 +296,7 @@ const ChatWidget = ({
       sending: true
     };
 
-    // ✅ Add to UI immediately
+    // Add to UI immediately
     setMessages(prev => [...prev, tempMessage]);
     setTimeout(scrollToBottom, 100);
 
@@ -305,7 +307,7 @@ const ChatWidget = ({
           const response = await messagesAPI.sendImage(activeReceiverId, event.target.result);
           cancelImagePreview();
           
-          // ✅ Replace temp message with real message
+          // Replace temp message with real message
           setMessages(prev => 
             prev.map(msg => 
               msg._id === tempMessage._id ? response.data : msg
@@ -315,7 +317,7 @@ const ChatWidget = ({
         } catch (error) {
           console.error('Image upload failed:', error);
           toast.error('Failed to send image');
-          // ✅ Remove temp message on error
+          // Remove temp message on error
           setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
         } finally {
           setUploading(false);
@@ -366,6 +368,48 @@ const ChatWidget = ({
     });
   };
 
+  // --- FIXED: DELETE MESSAGE WITH IMMEDIATE UI UPDATE ---
+  const handleDeleteMessage = async () => {
+    if (!contextMenu.message) return;
+
+    const messageId = contextMenu.message._id;
+    const messageToDelete = contextMenu.message;
+    
+    // Close context menu
+    setContextMenu({ visible: false, x: 0, y: 0, message: null });
+
+    // Store current messages for potential rollback
+    const previousMessages = [...messages];
+    
+    // ✅ Remove from UI immediately (optimistic update)
+    setMessages(prev => prev.filter(msg => msg._id !== messageId));
+    
+    // Show immediate visual feedback
+    toast.success('Deleting message...');
+
+    try {
+      // Call API to delete from server
+      await messagesAPI.deleteMessage(messageId);
+      
+      // Update UI to show success
+      toast.success('Message deleted successfully');
+      
+      // Emit socket event for other users if they're in the same chat
+      if (socket && activeReceiverId) {
+        socket.emit('delete-message', { 
+          messageId, 
+          chatId: activeReceiverId 
+        });
+      }
+    } catch (error) {
+      console.error('Delete failed:', error);
+      toast.error('Failed to delete message');
+      
+      // ✅ Restore messages on error
+      setMessages(previousMessages);
+    }
+  };
+
   const handleCopyMessage = async () => {
     if (!contextMenu.message?.text) return;
 
@@ -373,6 +417,7 @@ const ChatWidget = ({
       await navigator.clipboard.writeText(contextMenu.message.text);
       toast.success('Message copied to clipboard');
     } catch (error) {
+      // Fallback method
       const textArea = document.createElement('textarea');
       textArea.value = contextMenu.message.text;
       document.body.appendChild(textArea);
@@ -383,21 +428,6 @@ const ChatWidget = ({
     }
 
     setContextMenu({ visible: false, x: 0, y: 0, message: null });
-  };
-
-  const handleDeleteMessage = async () => {
-    if (!contextMenu.message) return;
-
-    const messageId = contextMenu.message._id;
-    setContextMenu({ visible: false, x: 0, y: 0, message: null });
-
-    try {
-      await messagesAPI.deleteMessage(messageId);
-      toast.success('Message deleted');
-    } catch (error) {
-      console.error('Delete failed:', error);
-      toast.error('Failed to delete message');
-    }
   };
 
   const handleDownloadImage = () => {
@@ -416,8 +446,6 @@ const ChatWidget = ({
   };
 
   // --- IMAGE PREVIEW MODAL ---
-  const [fullscreenImage, setFullscreenImage] = useState(null);
-
   const openFullscreenImage = (imageUrl) => {
     setFullscreenImage(imageUrl);
   };
