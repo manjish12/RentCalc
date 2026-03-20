@@ -11,12 +11,13 @@ async function sendFCMNotification(receiverToken, title, body, data = {}) {
     return null;
   }
   
+  // Check if Firebase is initialized
+  if (!admin.apps.length) {
+    console.log('⚠️ Firebase Admin not initialized - skipping push notification');
+    return null;
+  }
+  
   try {
-    if (!admin.apps.length) {
-      console.log('⚠️ Firebase Admin not initialized');
-      return null;
-    }
-    
     const message = {
       token: receiverToken,
       notification: {
@@ -57,8 +58,6 @@ async function sendFCMNotification(receiverToken, title, body, data = {}) {
     if (error.code === 'messaging/invalid-registration-token' ||
         error.code === 'messaging/registration-token-not-registered') {
       console.log('🗑️ Invalid token detected');
-      // Optionally remove invalid token from database
-      // await User.findByIdAndUpdate(userId, { pushToken: null });
     }
     
     return null;

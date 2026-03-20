@@ -198,7 +198,7 @@ export const resetTenantPassword = async (req, res) => {
 };
 
 
-// controllers/userController.js - Update savePushToken
+// controllers/userController.js - Update savePushToken function
 export const savePushToken = async (req, res) => {
   try {
     const { token } = req.body;
@@ -208,7 +208,7 @@ export const savePushToken = async (req, res) => {
     }
 
     // FCM tokens don't have a specific prefix - they're just strings
-    // But we can validate length (FCM tokens are usually > 100 chars)
+    // But we can validate length (FCM tokens are usually > 50 chars)
     const isValidFCMToken = token.length > 50;
     
     console.log('📱 Saving FCM push token for user:', req.user._id);

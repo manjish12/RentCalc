@@ -1,4 +1,3 @@
-// server.js
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -14,8 +13,9 @@ import userRoutes from './routes/userRoutes.js';
 import rentRoutes from './routes/rentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import yearRoutes from './routes/yearRoutes.js';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 
+// Load environment variables
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,19 +27,59 @@ const httpServer = createServer(app);
 // ============================================
 // Initialize Firebase Admin SDK
 // ============================================
+let firebaseInitialized = false;
+
 try {
-  const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
-  const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
-  
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-  
-  console.log('✅ Firebase Admin SDK initialized successfully');
+  // Method 1: Use environment variables (Production/Development)
+  if (process.env.FIREBASE_PROJECT_ID && 
+      process.env.FIREBASE_PRIVATE_KEY && 
+      process.env.FIREBASE_CLIENT_EMAIL) {
+    
+    console.log('📱 Initializing Firebase with environment variables...');
+    
+    // Format private key (replace \n with actual newlines)
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+    
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: privateKey,
+      }),
+    });
+    
+    firebaseInitialized = true;
+    console.log('✅ Firebase Admin SDK initialized from environment variables');
+  } 
+  // Method 2: Use local file (Development only - FALLBACK)
+  else {
+    const localPath = path.join(__dirname, 'firebase-service-account.json');
+    
+    if (existsSync(localPath)) {
+      console.warn('⚠️ Using local Firebase file (development only - not secure for production)');
+      const serviceAccount = JSON.parse(readFileSync(localPath, 'utf8'));
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      firebaseInitialized = true;
+      console.log('✅ Firebase Admin SDK initialized from local file');
+    } else {
+      console.warn('⚠️ Firebase not configured - push notifications will be disabled');
+      console.log('📝 To enable notifications:');
+      console.log('   1. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL in .env');
+      console.log('   2. Or place firebase-service-account.json in:', localPath);
+    }
+  }
 } catch (error) {
-  console.error('❌ Failed to initialize Firebase Admin SDK:', error.message);
-  console.log('⚠️ Push notifications will not work without Firebase Admin SDK');
+  console.error('❌ Firebase initialization failed:', error.message);
+  console.log('⚠️ Push notifications will not work');
 }
+
+// Make Firebase status available to routes
+app.use((req, res, next) => {
+  req.firebaseInitialized = firebaseInitialized;
+  next();
+});
 
 // Connect to MongoDB
 connectDB();
@@ -93,7 +133,11 @@ app.use('/api/years', yearRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    firebase: firebaseInitialized ? 'initialized' : 'not configured'
+  });
 });
 
 // 404 handler
@@ -111,4 +155,7 @@ const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  if (!firebaseInitialized) {
+    console.log('\n  WARNING: Firebase not initialized! Push notifications will NOT work.\n');
+  }
 });
