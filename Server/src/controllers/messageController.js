@@ -1,13 +1,69 @@
 // controllers/messageController.js
 import Message from '../models/Message.js';
 import User from '../models/User.js';
-import { Expo } from 'expo-server-sdk';
 import { v2 as cloudinary } from 'cloudinary';
+import admin from 'firebase-admin';
 
-// Create a new Expo SDK client
-export const expoClient = new Expo({
-  accessToken: process.env.EXPO_ACCESS_TOKEN, // Optional but recommended
-});
+// Helper function to send FCM notification
+async function sendFCMNotification(receiverToken, title, body, data = {}) {
+  if (!receiverToken) {
+    console.log('ℹ️ No push token provided');
+    return null;
+  }
+  
+  try {
+    if (!admin.apps.length) {
+      console.log('⚠️ Firebase Admin not initialized');
+      return null;
+    }
+    
+    const message = {
+      token: receiverToken,
+      notification: {
+        title: title,
+        body: body,
+      },
+      data: {
+        ...data,
+        timestamp: new Date().toISOString(),
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'chat',
+          sound: 'default',
+          priority: 'high',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          color: '#3498db',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+    };
+    
+    const response = await admin.messaging().send(message);
+    console.log('✅ FCM notification sent:', response);
+    return response;
+  } catch (error) {
+    console.error('❌ FCM notification error:', error.code, error.message);
+    
+    if (error.code === 'messaging/invalid-registration-token' ||
+        error.code === 'messaging/registration-token-not-registered') {
+      console.log('🗑️ Invalid token detected');
+      // Optionally remove invalid token from database
+      // await User.findByIdAndUpdate(userId, { pushToken: null });
+    }
+    
+    return null;
+  }
+}
 
 // ===============================
 // Get conversation between 2 users
@@ -32,7 +88,7 @@ export const getMessages = async (req, res) => {
 };
 
 // ===============================
-// Send Message with Push Notification (FIXED)
+// Send Message with FCM Push Notification
 // ===============================
 export const sendMessage = async (req, res) => {
   try {
@@ -43,7 +99,6 @@ export const sendMessage = async (req, res) => {
       return res.status(400).json({ error: 'Receiver ID is required' });
     }
 
-    // Verify receiver exists
     const receiver = await User.findById(receiverId);
     if (!receiver) {
       return res.status(404).json({ error: 'Receiver not found' });
@@ -52,7 +107,6 @@ export const sendMessage = async (req, res) => {
     let imageUrl = null;
     let imagePublicId = null;
 
-    // Upload image if present
     if (messageType === 'image' && imageBase64) {
       try {
         const uploadResult = await cloudinary.uploader.upload(imageBase64, {
@@ -72,12 +126,10 @@ export const sendMessage = async (req, res) => {
       }
     }
 
-    // Validate message content
     if (messageType === 'text' && (!text || !text.trim())) {
       return res.status(400).json({ error: 'Message text is required' });
     }
 
-    // Save message
     const newMessage = await Message.create({
       senderId,
       receiverId,
@@ -88,102 +140,39 @@ export const sendMessage = async (req, res) => {
       isRead: false
     });
 
-    // Real-time Socket Emit
+    // Socket emit for real-time
     const receiverSocketId = global.onlineUsers?.get(receiverId.toString());
     if (receiverSocketId && req.io) {
       req.io.to(receiverSocketId).emit('receive-message', newMessage);
     }
 
-// ============================================
-// FIXED: Push Notification for Android
-// ============================================
-const sender = await User.findById(senderId);
+    // FCM Push Notification
+    const sender = await User.findById(senderId);
 
-if (receiver?.pushToken) {
-  // Validate token format
-  if (!Expo.isExpoPushToken(receiver.pushToken)) {
-    console.log('❌ Invalid Expo push token format:', receiver.pushToken.substring(0, 20));
-  } else {
-    // Prepare notification content
-    const notificationBody = messageType === 'image'
-      ? '📷 Sent an image'
-      : (text?.substring(0, 100) || 'New message');
-    
-    const notificationTitle = sender.name || 'New Message';
-
-    // Create notification message with Android-specific fields
-    const message = {
-      to: receiver.pushToken,
-      sound: 'default',
-      title: notificationTitle,
-      body: notificationBody,
-      data: {
-        type: 'chat',
-        senderId: senderId.toString(),
-        senderName: sender.name,
-        messageId: newMessage._id.toString(),
-        messageType: messageType,
-        timestamp: new Date().toISOString()
-      },
-      // Android specific
-      channelId: 'chat', // Must match Android channel
-      priority: 'high', // High priority for Android
-      badge: 1,
-      // Additional Android options
-      _displayInForeground: true,
-      _category: 'chat',
-      // For Android heads-up notification
-      android: {
-        channelId: 'chat',
-        priority: 'high',
-        sound: 'default',
-        vibrate: true,
-        color: '#3498db'
-      }
-    };
-
-    try {
-      // Send notification
-      const chunks = expoClient.chunkPushNotifications([message]);
-      const tickets = [];
+    if (receiver?.pushToken) {
+      console.log('📤 Sending FCM notification to:', receiver.pushToken.substring(0, 20) + '...');
       
-      for (let chunk of chunks) {
-        const ticketChunk = await expoClient.sendPushNotificationsAsync(chunk);
-        tickets.push(...ticketChunk);
-      }
+      const notificationBody = messageType === 'image'
+        ? '📷 Sent an image'
+        : (text?.substring(0, 100) || 'New message');
       
-      console.log('✅ Chat notification sent:', tickets[0]?.id);
+      const notificationTitle = sender.name || 'New Message';
 
-      // Check for errors in tickets
-      for (let ticket of tickets) {
-        if (ticket.status === 'error') {
-          console.error('❌ Push ticket error:', ticket.message);
-          
-          // Handle specific errors
-          if (ticket.details?.error === 'DeviceNotRegistered') {
-            // Token is invalid - remove it
-            await User.findByIdAndUpdate(receiver._id, {
-              $set: { pushToken: null }
-            });
-            console.log('✅ Removed invalid push token for user:', receiver._id);
-          }
-          
-          if (ticket.details?.error === 'MessageTooBig') {
-            console.error('❌ Push message too big');
-          }
+      await sendFCMNotification(
+        receiver.pushToken,
+        notificationTitle,
+        notificationBody,
+        {
+          type: 'chat',
+          senderId: senderId.toString(),
+          senderName: sender.name,
+          messageId: newMessage._id.toString(),
+          messageType: messageType,
         }
-      }
-    } catch (pushError) {
-      console.error('❌ Push notification error:', pushError);
-      // Log detailed error for debugging
-      if (pushError.response) {
-        console.error('Push API response:', pushError.response.data);
-      }
+      );
+    } else {
+      console.log('ℹ️ No push token for receiver:', receiverId);
     }
-  }
-} else {
-  console.log('ℹ️ No push token for receiver:', receiverId);
-}
 
     res.status(201).json(newMessage);
 
@@ -317,34 +306,16 @@ export const sendTestNotification = async (req, res) => {
       return res.status(400).json({ error: 'No push token found for user' });
     }
 
-    if (!Expo.isExpoPushToken(user.pushToken)) {
-      return res.status(400).json({ error: 'Invalid push token format' });
-    }
-
-    const message = {
-      to: user.pushToken,
-      sound: 'default',
-      title: '🔔 Test Notification',
-      body: 'This is a test message from RentCalc',
-      data: { 
-        type: 'test',
-        timestamp: new Date().toISOString()
-      },
-      channelId: 'chat',
-      priority: 'high',
-      android: {
-        channelId: 'chat',
-        priority: 'high',
-        sound: 'default',
-        vibrate: true
-      }
-    };
-
-    const ticket = await expoClient.sendPushNotificationsAsync([message]);
+    const result = await sendFCMNotification(
+      user.pushToken,
+      '🔔 Test Notification',
+      'This is a test message from RentCalc',
+      { type: 'test', timestamp: new Date().toISOString() }
+    );
     
     res.json({ 
       success: true, 
-      ticket,
+      result,
       message: 'Test notification sent',
       token: user.pushToken.substring(0, 30) + '...'
     });

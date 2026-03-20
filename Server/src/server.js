@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import admin from 'firebase-admin';
 import messageRoutes from './routes/messageRoutes.js';
 import connectDB from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
@@ -13,7 +14,7 @@ import userRoutes from './routes/userRoutes.js';
 import rentRoutes from './routes/rentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import yearRoutes from './routes/yearRoutes.js';
-
+import { readFileSync } from 'fs';
 
 dotenv.config();
 
@@ -22,6 +23,23 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
+
+// ============================================
+// Initialize Firebase Admin SDK
+// ============================================
+try {
+  const serviceAccountPath = path.join(__dirname, 'firebase-service-account.json');
+  const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
+  
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  
+  console.log('✅ Firebase Admin SDK initialized successfully');
+} catch (error) {
+  console.error('❌ Failed to initialize Firebase Admin SDK:', error.message);
+  console.log('⚠️ Push notifications will not work without Firebase Admin SDK');
+}
 
 // Connect to MongoDB
 connectDB();
@@ -32,7 +50,6 @@ app.use(cors({
   credentials: true
 }));
 
-// Increase limit for Base64 image uploads
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -72,8 +89,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/rents', rentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/messages', messageRoutes);
-app.use('/api/years', yearRoutes); 
-// uploadRoutes is no longer needed as we use userController for uploads
+app.use('/api/years', yearRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
