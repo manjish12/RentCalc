@@ -13,7 +13,15 @@ const BS_MONTHS = [
 const sendRentNotification = async (userId, title, body, io) => {
   try {
     const user = await User.findById(userId);
-    if (!user) return;
+    if (!user) {
+      console.log('❌ User not found:', userId);
+      return;
+    }
+
+    console.log('📤 Sending rent notification to:', userId);
+    console.log('   Title:', title);
+    console.log('   Body:', body);
+    console.log('   Push Token exists:', !!user.pushToken);
 
     // 1. Socket.io Notification (For Web & Active App)
     const socketId = global.onlineUsers?.get(userId.toString());
@@ -22,24 +30,36 @@ const sendRentNotification = async (userId, title, body, io) => {
         title: title, 
         message: body 
       });
+      console.log('✅ Socket notification sent');
     }
 
-    // 2. FCM Push Notification (For Mobile Background)
+    // 2. FCM Push Notification (For Mobile Background) - Dynamic Import
     if (user.pushToken) {
       try {
-        // Import the sendFCMNotification function dynamically
-        const { sendFCMNotification } = await import('./messageController.js');
+        // Dynamic import - works even if function is not exported
+        const messageModule = await import('./messageController.js');
         
-        await sendFCMNotification(
-          user.pushToken,
-          title,
-          body,
-          { type: 'rent_update', userId: userId.toString() }
-        );
-        console.log('✅ Rent FCM notification sent to:', userId);
+        // Try to get the sendFCMNotification function
+        const sendFCMNotification = messageModule.sendFCMNotification || 
+                                    messageModule.default?.sendFCMNotification;
+        
+        if (sendFCMNotification && typeof sendFCMNotification === 'function') {
+          await sendFCMNotification(
+            user.pushToken,
+            title,
+            body,
+            { type: 'rent_update', userId: userId.toString() }
+          );
+          console.log('✅ Rent FCM notification sent to:', userId);
+        } else {
+          console.log('⚠️ sendFCMNotification function not found in messageController');
+          console.log('   Available exports:', Object.keys(messageModule));
+        }
       } catch (error) {
-        console.error('Error sending FCM push notification:', error);
+        console.error('❌ Error sending FCM push notification:', error.message);
       }
+    } else {
+      console.log('⚠️ No push token for user:', userId);
     }
   } catch (error) {
     console.error('Notification logic error:', error);
