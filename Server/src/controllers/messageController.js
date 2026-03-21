@@ -4,14 +4,12 @@ import User from '../models/User.js';
 import { v2 as cloudinary } from 'cloudinary';
 import admin from 'firebase-admin';
 
-// Helper function to send FCM notification
-async function sendFCMNotification(receiverToken, title, body, data = {}) {
+export async function sendFCMNotification(receiverToken, title, body, data = {}) {
   if (!receiverToken) {
     console.log('ℹ️ No push token provided');
     return null;
   }
   
-  // Check if Firebase is initialized
   if (!admin.apps.length) {
     console.log('⚠️ Firebase Admin not initialized - skipping push notification');
     return null;
@@ -26,25 +24,17 @@ async function sendFCMNotification(receiverToken, title, body, data = {}) {
       },
       data: {
         ...data,
+        type: data.type || 'chat',
         timestamp: new Date().toISOString(),
       },
       android: {
         priority: 'high',
         notification: {
           channelId: 'chat',
-          sound: 'default',
           priority: 'high',
           defaultSound: true,
           defaultVibrateTimings: true,
           color: '#3498db',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-          },
         },
       },
     };
@@ -54,12 +44,6 @@ async function sendFCMNotification(receiverToken, title, body, data = {}) {
     return response;
   } catch (error) {
     console.error('❌ FCM notification error:', error.code, error.message);
-    
-    if (error.code === 'messaging/invalid-registration-token' ||
-        error.code === 'messaging/registration-token-not-registered') {
-      console.log('🗑️ Invalid token detected');
-    }
-    
     return null;
   }
 }
