@@ -4,20 +4,14 @@ import User from '../models/User.js';
 import { v2 as cloudinary } from 'cloudinary';
 import admin from 'firebase-admin';
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-// Helper function to send FCM notification with hidden message content
+// Helper function to send FCM notification
 async function sendFCMNotification(receiverToken, title, body, data = {}) {
   if (!receiverToken) {
     console.log('ℹ️ No push token provided');
     return null;
   }
   
+  // Check if Firebase is initialized
   if (!admin.apps.length) {
     console.log('⚠️ Firebase Admin not initialized - skipping push notification');
     return null;
@@ -28,22 +22,21 @@ async function sendFCMNotification(receiverToken, title, body, data = {}) {
       token: receiverToken,
       notification: {
         title: title,
-        body: body, // Generic message like "You received a new message"
+        body: body,
       },
       data: {
         ...data,
-        type: 'chat',
         timestamp: new Date().toISOString(),
       },
       android: {
         priority: 'high',
         notification: {
           channelId: 'chat',
+          sound: 'default',
           priority: 'high',
           defaultSound: true,
           defaultVibrateTimings: true,
           color: '#3498db',
-          visibility: 1, // 1 = public, 0 = private (hides on lock screen)
         },
       },
       apns: {
@@ -51,7 +44,6 @@ async function sendFCMNotification(receiverToken, title, body, data = {}) {
           aps: {
             sound: 'default',
             badge: 1,
-            'content-available': 1,
           },
         },
       },
@@ -62,6 +54,12 @@ async function sendFCMNotification(receiverToken, title, body, data = {}) {
     return response;
   } catch (error) {
     console.error('❌ FCM notification error:', error.code, error.message);
+    
+    if (error.code === 'messaging/invalid-registration-token' ||
+        error.code === 'messaging/registration-token-not-registered') {
+      console.log('🗑️ Invalid token detected');
+    }
+    
     return null;
   }
 }
@@ -89,7 +87,7 @@ export const getMessages = async (req, res) => {
 };
 
 // ===============================
-// Send Message with Hidden Notification Content
+// Send Message with FCM Push Notification
 // ===============================
 export const sendMessage = async (req, res) => {
   try {
@@ -147,33 +145,28 @@ export const sendMessage = async (req, res) => {
       req.io.to(receiverSocketId).emit('receive-message', newMessage);
     }
 
-    // FCM Push Notification - HIDDEN MESSAGE CONTENT
+    // FCM Push Notification
     const sender = await User.findById(senderId);
 
     if (receiver?.pushToken) {
       console.log('📤 Sending FCM notification to:', receiver.pushToken.substring(0, 20) + '...');
       
-      const notificationTitle = sender.name || 'New Message';
-      // Generic notification body - hides actual message content
-      const notificationBody = "You received a new message";
-      
-      // Store actual message in data for app to retrieve when opened
-      const actualMessage = messageType === 'image' 
-        ? 'Sent an image' 
+      const notificationBody = messageType === 'image'
+        ? 'Sent an image'
         : (text?.substring(0, 100) || 'New message');
+      
+      const notificationTitle = sender.name || 'New Message';
 
       await sendFCMNotification(
         receiver.pushToken,
         notificationTitle,
-        notificationBody,  // ← Generic text for notification bar
+        notificationBody,
         {
           type: 'chat',
           senderId: senderId.toString(),
           senderName: sender.name,
           messageId: newMessage._id.toString(),
           messageType: messageType,
-          actualMessage: actualMessage, // ← Real message stored here
-          messageText: messageType === 'text' ? (text || '') : '',
         }
       );
     } else {
