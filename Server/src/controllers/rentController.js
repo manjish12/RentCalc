@@ -193,7 +193,7 @@ export const createRent = async (req, res) => {
       
       await sendRentNotification(
         userId,
-        '📄 New Rent Bill',
+        ' New Rent Bill',
         notificationMessage,
         req.io
       );
@@ -226,7 +226,7 @@ export const createBulkRents = async (req, res) => {
       const userId = entries[0].userId;
       await sendRentNotification(
         userId,
-        '📊 Bulk Rents Added',
+        ' Bulk Rents Added',
         `${entries.length} rent records have been added to your account.`,
         req.io
       );
@@ -277,7 +277,7 @@ export const updateRent = async (req, res) => {
     // ➤ SEND NOTIFICATION
     await sendRentNotification(
       updatedRent.userId,
-      '✏️ Rent Updated',
+      ' Rent Updated',
       `Your rent for ${updatedRent.month} ${updatedRent.year} has been updated.`,
       req.io
     );
@@ -302,7 +302,7 @@ export const deleteRent = async (req, res) => {
     // ➤ SEND NOTIFICATION
     await sendRentNotification(
       userId,
-      '🗑️ Rent Deleted',
+      ' Rent Deleted',
       `The rent record for ${month} ${year} has been removed.`,
       req.io
     );
@@ -371,7 +371,7 @@ export const applyBulkPayment = async (req, res) => {
     // ➤ SEND NOTIFICATION
     await sendRentNotification(
       userId,
-      '💰 Payment Received',
+      ' Payment Received',
       `A payment of Rs. ${amount} was applied to your pending bills.`,
       req.io
     );
