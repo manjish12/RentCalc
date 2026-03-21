@@ -1,9 +1,6 @@
 // controllers/rentController.js
 import Rent from '../models/Rent.js';
-import User from '../models/User.js'; // Import User to get Push Token
-import { Expo } from 'expo-server-sdk'; // Import Expo SDK
-
-const expo = new Expo();
+import User from '../models/User.js';
 
 const BS_MONTHS = [
   'Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
@@ -11,7 +8,7 @@ const BS_MONTHS = [
 ];
 
 // ==========================================
-// Helper: Send Notification (Socket + Push)
+// Helper: Send Notification (Socket + FCM Push)
 // ==========================================
 const sendRentNotification = async (userId, title, body, io) => {
   try {
@@ -27,20 +24,21 @@ const sendRentNotification = async (userId, title, body, io) => {
       });
     }
 
-    // 2. Push Notification (For Mobile Background)
-    if (user.pushToken && Expo.isExpoPushToken(user.pushToken)) {
-      const messages = [{
-        to: user.pushToken,
-        sound: 'default',
-        title: title,
-        body: body,
-        data: { type: 'rent_update' },
-      }];
-
+    // 2. FCM Push Notification (For Mobile Background)
+    if (user.pushToken) {
       try {
-        await expo.sendPushNotificationsAsync(messages);
+        // Import the sendFCMNotification function dynamically
+        const { sendFCMNotification } = await import('./messageController.js');
+        
+        await sendFCMNotification(
+          user.pushToken,
+          title,
+          body,
+          { type: 'rent_update', userId: userId.toString() }
+        );
+        console.log('✅ Rent FCM notification sent to:', userId);
       } catch (error) {
-        console.error('Error sending push notification:', error);
+        console.error('Error sending FCM push notification:', error);
       }
     }
   } catch (error) {
@@ -189,10 +187,14 @@ export const createRent = async (req, res) => {
 
     // ➤ SEND NOTIFICATION
     if (createdRents.length > 0) {
+      const notificationMessage = createdRents.length === 1 
+        ? `New rent bill added for ${month} ${year}`
+        : `${createdRents.length} rent bills added starting ${month} ${year}`;
+      
       await sendRentNotification(
         userId,
-        'Rent Bills Generated',
-        `Owner added rent bills for ${createdRents.length} month(s) starting ${month} ${year}.`,
+        '📄 New Rent Bill',
+        notificationMessage,
         req.io
       );
     }
@@ -224,7 +226,7 @@ export const createBulkRents = async (req, res) => {
       const userId = entries[0].userId;
       await sendRentNotification(
         userId,
-        'Bulk Rents Added',
+        '📊 Bulk Rents Added',
         `${entries.length} rent records have been added to your account.`,
         req.io
       );
@@ -275,8 +277,8 @@ export const updateRent = async (req, res) => {
     // ➤ SEND NOTIFICATION
     await sendRentNotification(
       updatedRent.userId,
-      'Rent Updated',
-      `Owner updated your rent for ${updatedRent.month} ${updatedRent.year}.`,
+      '✏️ Rent Updated',
+      `Your rent for ${updatedRent.month} ${updatedRent.year} has been updated.`,
       req.io
     );
 
@@ -300,7 +302,7 @@ export const deleteRent = async (req, res) => {
     // ➤ SEND NOTIFICATION
     await sendRentNotification(
       userId,
-      'Rent Deleted',
+      '🗑️ Rent Deleted',
       `The rent record for ${month} ${year} has been removed.`,
       req.io
     );
@@ -369,7 +371,7 @@ export const applyBulkPayment = async (req, res) => {
     // ➤ SEND NOTIFICATION
     await sendRentNotification(
       userId,
-      'Bulk Payment Applied',
+      '💰 Payment Received',
       `A payment of Rs. ${amount} was applied to your pending bills.`,
       req.io
     );
