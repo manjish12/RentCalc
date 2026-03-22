@@ -12,14 +12,18 @@ const notificationSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  title: {
+    type: String,
+    default: 'Notification'
+  },
   message: {
     type: String,
-    default: 'Rent payment completed'
+    required: true
   },
   type: {
     type: String,
-    enum: ['payment', 'reminder', 'general'],
-    default: 'payment'
+    enum: ['payment', 'reminder', 'general', 'security', 'message'], // ← ADD 'security' and 'message'
+    default: 'general'
   },
   isRead: {
     type: Boolean,
