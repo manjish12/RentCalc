@@ -7,7 +7,7 @@ import Year from '../models/Year.js';
 import bcrypt from 'bcryptjs';
 import { v2 as cloudinary } from 'cloudinary';
 
-// ✅ Configure Cloudinary
+// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -116,7 +116,6 @@ export const getQR = async (req, res) => {
   }
 };
 
-// ✅ Cloudinary upload for QR codes
 export const uploadQR = async (req, res) => {
   try {
     const { imageBase64 } = req.body;
@@ -137,53 +136,63 @@ export const uploadQR = async (req, res) => {
   }
 };
 
+// In resetTenantPassword function, add debug logs and ensure password is saved correctly
+
 export const resetTenantPassword = async (req, res) => {
   try {
     const { tenantId, newPassword } = req.body;
     const owner = req.user;
+
+    console.log('🔄 Resetting password for tenant:', tenantId);
+    console.log('📝 New password length:', newPassword?.length);
 
     const tenant = await User.findById(tenantId);
     if (!tenant || tenant.linkedOwnerId?.toString() !== owner._id.toString()) {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    tenant.password = await bcrypt.hash(newPassword, salt);
+    // Directly set password (pre-save hook will hash it)
+    tenant.password = newPassword;
     tenant.mustChangePassword = true;
-    
     tenant.resetBy = { name: owner.name, id: owner._id };
     tenant.resetAt = new Date();
     
     await tenant.save();
+    console.log('✅ Password reset saved for tenant:', tenant.email);
 
-    // ✅ Save notification to database
-    await Notification.create({
-      tenantId: tenant._id,
-      ownerId: owner._id,
-      title: 'Password Reset',
-      message: `Your password has been reset by ${owner.name}. Please log in and change your password immediately.`,
-      type: 'security',
-      isRead: false,
-      createdAt: new Date()
-    });
+    // Save notification
+    try {
+      await Notification.create({
+        tenantId: tenant._id,
+        ownerId: owner._id,
+        title: 'Password Reset',
+        message: `Your password has been reset by ${owner.name}. Please log in and change your password immediately.`,
+        type: 'security',
+        isRead: false,
+        createdAt: new Date()
+      });
+      console.log('✅ Notification saved');
+    } catch (notifError) {
+      console.error('Notification save failed:', notifError.message);
+    }
 
-    // ✅ Send push notification
-    if (tenant.pushToken && Expo.isExpoPushToken(tenant.pushToken)) {
+    // Send FCM notification
+    if (tenant.pushToken) {
       try {
-        const { sendPushNotification } = await import('../utils/pushNotification.js');
-        await sendPushNotification(tenant.pushToken, {
-          title: '🔒 Password Reset',
-          body: `${owner.name} reset your password. Change it now in Settings.`,
-          data: {
+        const { sendFCMNotification } = await import('./messageController.js');
+        await sendFCMNotification(
+          tenant.pushToken,
+          ' Password Reset',
+          `${owner.name} reset your password. Change it now in Settings.`,
+          {
             type: 'password_reset',
             tenantId: tenant._id.toString(),
             ownerName: owner.name
-          },
-          channelId: 'security' // ✅ Must match app channel
-        });
-        console.log('✅ Password reset notification sent');
+          }
+        );
+        console.log('✅ Push notification sent');
       } catch (pushError) {
-        console.error('Push notification failed:', pushError);
+        console.error('Push notification failed:', pushError.message);
       }
     }
 
@@ -197,8 +206,6 @@ export const resetTenantPassword = async (req, res) => {
   }
 };
 
-
-// controllers/userController.js - Update savePushToken function
 export const savePushToken = async (req, res) => {
   try {
     const { token } = req.body;
@@ -207,8 +214,6 @@ export const savePushToken = async (req, res) => {
       return res.status(400).json({ error: "Token required" });
     }
 
-    // FCM tokens don't have a specific prefix - they're just strings
-    // But we can validate length (FCM tokens are usually > 50 chars)
     const isValidFCMToken = token.length > 50;
     
     console.log('📱 Saving FCM push token for user:', req.user._id);

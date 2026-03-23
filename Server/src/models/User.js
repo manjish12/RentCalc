@@ -14,11 +14,10 @@ const userSchema = new mongoose.Schema({
   mustChangePassword: { type: Boolean, default: false },
   pushToken: { type: String, default: null },
   
-  // --- PASSWORD HISTORY SCHEMA ---
   passwordHistory: [{
     hash: String,
     changedAt: { type: Date, default: Date.now },
-    changedBy: String // "Self" or "Owner Name (Owner)"
+    changedBy: String
   }]
 }, {
   timestamps: true
@@ -43,6 +42,10 @@ userSchema.statics.generateOwnerCode = async function() {
   }
   return code;
 };
+
+// Only add index for fields that don't have 'unique: true'
+// This prevents duplicate index warnings
+userSchema.index({ linkedOwnerId: 1 });
 
 const User = mongoose.model('User', userSchema);
 export default User;

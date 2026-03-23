@@ -15,12 +15,15 @@ export const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id).select('-password');
     
-    if (!req.user) {
+    // Use lean() for faster query
+    const user = await User.findById(decoded.id).select('-password -passwordHistory').lean();
+    
+    if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
     
+    req.user = user;
     next();
   } catch (error) {
     console.error('Auth error:', error.message);

@@ -64,6 +64,8 @@ export const login = async (req, res) => {
     
     const user = await User.findOne({ email });
     if (!user) {
+      // Add delay for invalid credentials to prevent brute force
+      await new Promise(resolve => setTimeout(resolve, 1500));
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -75,6 +77,8 @@ export const login = async (req, res) => {
     }
 
     if (!isMatch) {
+      // Add delay for invalid credentials
+      await new Promise(resolve => setTimeout(resolve, 1500));
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -100,7 +104,6 @@ export const login = async (req, res) => {
 
 export const logout = async (req, res) => {
   try {
-    // Clear push token to prevent cross-account notifications
     await User.findByIdAndUpdate(req.user._id, {
       pushToken: null
     });
