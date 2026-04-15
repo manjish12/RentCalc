@@ -261,7 +261,7 @@ const RentHistory = ({
                   <span className="view-value">{formatCurrency(viewEntry.water)}</span>
                 </div>
                 <div className="view-detail-block">
-                  <span className="view-label">Waste Management</span>
+                  <span className="view-label">Waste</span>
                   <span className="view-value">{formatCurrency(viewEntry.waste)}</span>
                 </div>
               </div>
