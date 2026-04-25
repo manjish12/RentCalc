@@ -89,7 +89,7 @@ const Complaint = () => {
         <div className="auth-header" style={{ marginBottom: '20px' }}>
           <button 
             className="complaint-back-btn" 
-            style={{ flex: 1,  color: '#7040e0ff',background: '#ffffffff', border: '1px solid #ffffffff' }}
+            style={{ flex: 1,  color: '#6d61d7ff',background: '#ffffffff', border: '1px solid #ffffffff' }}
             onClick={() => navigate('/login')}
           >
             <FiArrowLeftCircle size={40} />
