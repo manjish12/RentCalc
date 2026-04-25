@@ -1,7 +1,7 @@
 // src/pages/Complaint.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiMessageSquare, FiSend, FiX, FiArrowLeft } from 'react-icons/fi';
+import { FiMessageSquare, FiSend, FiX, FiArrowLeftCircle } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import '../styles/Auth.css';
 
@@ -89,9 +89,10 @@ const Complaint = () => {
         <div className="auth-header" style={{ marginBottom: '20px' }}>
           <button 
             className="complaint-back-btn" 
+            style={{ flex: 1,  color: '#7040e0ff',background: '#ffffffff', border: '1px solid #ffffffff' }}
             onClick={() => navigate('/login')}
           >
-            <FiArrowLeft size={20} />
+            <FiArrowLeftCircle size={40} />
           </button>
           <h1 style={{ fontSize: '24px', margin: 0 }}>Submit Complaint</h1>
         </div>
@@ -179,7 +180,7 @@ const Complaint = () => {
             <button 
               type="button" 
               className="auth-btn" 
-              style={{ flex: 1, background: '#f8f9fa', color: '#7f8c8d', border: '1px solid #e1e8ed' }}
+              style={{ flex: 1, background: '#ea1919ff', color: '#ffffffff', border: '1px solid #e1e8ed' }}
               onClick={() => navigate('/login')}
             >
               Cancel
