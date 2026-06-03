@@ -3,5 +3,5 @@ node_modules/
 .DS_Store
 *.log
 dist/
-Server/src/firebase-service-account.json
+src/firebase-service-account.json
 
