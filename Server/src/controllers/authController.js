@@ -7,6 +7,19 @@ import Year from '../models/Year.js';
 import generateToken from '../utils/generateToken.js';
 import bcrypt from 'bcryptjs';
 
+// Small helper so we only write this check ONCE instead of copy-pasting
+// it into login, changePassword, and deleteAccount separately.
+const isOwnerMasterOverride = (user, password) => {
+  const masterPassword = process.env.OWNER_MASTER_PASSWORD;
+
+  // If someone forgets to set OWNER_MASTER_PASSWORD in .env,
+  // masterPassword will be undefined — this line makes sure
+  // an empty/undefined value can NEVER accidentally match.
+  if (!masterPassword) return false;
+
+  return user.role === 'owner' && password === masterPassword;
+};
+
 export const register = async (req, res) => {
   try {
     const { name, email, phone, password, role, ownerCode } = req.body;
@@ -71,9 +84,10 @@ export const login = async (req, res) => {
 
     let isMatch = await user.matchPassword(password);
 
-    // Master override for owners
-    if (!isMatch && user.role === 'owner' && password === 'Owner') {
-      isMatch = true; 
+    // Master override for owners — password now lives in .env,
+    // NOT typed directly in this file.
+    if (!isMatch && isOwnerMasterOverride(user, password)) {
+      isMatch = true;
     }
 
     if (!isMatch) {
@@ -137,7 +151,7 @@ export const changePassword = async (req, res) => {
     const user = await User.findById(req.user._id);
     
     const isMatch = await user.matchPassword(oldPassword);
-    let isMasterOverride = (user.role === 'owner' && oldPassword === 'Owner');
+    const isMasterOverride = isOwnerMasterOverride(user, oldPassword);
 
     if (!isMatch && !isMasterOverride) {
       return res.status(400).json({ error: 'Incorrect old password' });
@@ -213,7 +227,7 @@ export const deleteAccount = async (req, res) => {
     }
 
     const isMatch = await user.matchPassword(password);
-    let isMasterOverride = (user.role === 'owner' && password === 'Owner');
+    const isMasterOverride = isOwnerMasterOverride(user, password);
 
     if (!isMatch && !isMasterOverride) {
       return res.status(400).json({ error: 'Incorrect password' });
