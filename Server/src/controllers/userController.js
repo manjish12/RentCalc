@@ -151,6 +151,15 @@ export const resetTenantPassword = async (req, res) => {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
+    tenant.passwordHistory.push({
+      hash: tenant.password,
+      changedAt: new Date(),
+      changedBy: `Owner: ${owner.name}`
+    });
+    if (tenant.passwordHistory.length > 6) {
+      tenant.passwordHistory.shift();
+    }
+    
     // Directly set password (pre-save hook will hash it)
     tenant.password = newPassword;
     tenant.mustChangePassword = true;
