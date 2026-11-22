@@ -220,6 +220,12 @@ export const savePushToken = async (req, res) => {
     console.log('🔑 Token format valid:', isValidFCMToken);
     console.log('🔑 Token preview:', token.substring(0, 30) + '...');
 
+    // NEW: a phone token belongs to ONE account. Take it away from every other account first.
+    await User.updateMany(
+      { pushToken: token, _id: { $ne: req.user._id } },
+      { $set: { pushToken: null } }
+    );
+    
     await User.findByIdAndUpdate(req.user._id, { 
       pushToken: token,
       pushTokenUpdatedAt: new Date()
